@@ -166,5 +166,24 @@ def get_all_items():
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)})
 
+@app.route("/cart")
+def cart():
+    cart_items = [
+        {
+            "name": "Flared trousers with linen",
+            "image_url": "",
+            "price": "22,99",
+            "quantity": 1,
+            "impact": "Low"
+        }
+        # Add more items as needed
+    ]
+    summary = {
+        "subtotal": "22,99",
+        "total": "22,99",
+        "free_shipping_threshold": "22.01"
+    }
+    return render_template("cart.html", cart_items=cart_items, summary=summary, hide_nav=True)
+
 if __name__ == '__main__':
     app.run(debug=True)

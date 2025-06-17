@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fashion Environmental Impact Analyzer - Cart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='cart.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Cart Section -->
+        <div class="cart-section">
+            <h1 class="cart-title">Your Basket ({{ cart_items|length }})</h1>
+            {% if cart_items and cart_items|length > 0 %}
+                {% for item in cart_items %}
+                <div class="product-item mb-4">
+                    <div class="product-details">
+                        <h3 class="product-name">{{ item.name }}</h3>
+                        <div class="product-options">
+                            {% for opt in item.options %}
+                            <span class="product-option">{{ opt }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-2">
+                            <span style="font-size: 14px; color: #666;">Environmental Impact: <span class="text-muted">{{ item.impact }}</span></span>
+                        </div>
+                    </div>
+                    <div class="product-actions">
+                        <button class="action-btn" title="Remove">🗑</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">No items in your basket yet.</div>
+            {% endif %}
+        </div>
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="summary-section">
+                <h2 class="summary-title">Summary</h2>
+                <div class="summary-row">
+                    <span>{{ cart_items|length }} products</span>
+                </div>
+                <div class="summary-row">
+                    <span>Shipping to store</span>
+                    <span class="free-badge">Free!</span>
+                </div>
+                <div class="summary-total">
+                    <span>TOTAL</span>
+                   
+                </div>
+                <div class="payment-buttons">
+                    <button class="gpay-btn">
+                        <span style="color: #4285f4;">G</span> Pay
+                    </button>
+                    <button class="process-btn">PROCESS ORDER</button>
+                </div>
+                <div class="delivery-info">
+                    <span>🚚</span>
+                    <span>Free home delivery if you add another <strong>{{ summary.free_shipping_threshold }} €</strong> (only products from the new collection without discount).</span>
+                </div>
+                <div class="info-item">
+                    <span>ℹ️</span>
+                    <span>The items are not reserved. Too bad to miss this chance, right?</span>
+                </div>
+                <div class="promo-section">
+                    <div class="info-item" style="margin: 0;">
+                        <span>%</span>
+                        <span>Do you have a promo code?</span>
+                    </div>
+                    <span>></span>
+                </div>
+                <div class="gift-section">
+                    <div class="info-item" style="margin: 0;">
+                        <span>🎁</span>
+                        <span>Choose gift options later</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

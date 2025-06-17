@@ -163,12 +163,14 @@
             <p>Discover the true environmental cost of your clothing</p>
         </div>
         
+        {% if not hide_nav %}
         <nav class="nav">
             <ul class="nav-links">
                 <li><a href="/" class="nav-link">🔍 Item Scanner</a></li>
                 <li><a href="/database" class="nav-link">🗃️ Database</a></li>
             </ul>
         </nav>
+        {% endif %}
         
         <div class="content">
             {% block content %}{% endblock %}

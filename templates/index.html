@@ -2,21 +2,36 @@
 
 {% block content %}
 <div class="scanner-section">
-    <h2>🏷️ Enter Item QR Code</h2>
-    <div class="input-group">
-        <input type="text" id="qrInput" placeholder="Enter QR code (e.g., SHIRT001)" />
-        <button class="btn" onclick="analyzeItem()">Analyze Item</button>
-    </div>
-    
-    <div class="sample-codes">
-        <h3>Sample QR codes to try:</h3>
-        <ul>
-            <li><strong>SHIRT001</strong> - Cotton T-Shirt</li>
-            <li><strong>JEANS001</strong> - Denim Jeans</li>
-            <li><strong>SWEAT001</strong> - Cotton-Poly Hoodie</li>
-            <li><strong>DRESS001</strong> - Summer Dress</li>
-            <li><strong>SOCK001</strong> - Cotton Socks</li>
-        </ul>
+    <div class="row mb-4 justify-content-center">
+        <div class="col-md-7 col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h4 class="mb-4 text-center"><span class="me-2">🏷️</span>Enter Item QR Code</h4>
+                    <form class="mb-3">
+                        <div class="input-group">
+                            <input type="text" class="form-control form-control-lg" placeholder="Enter QR code (e.g., SHIRT001)" style="border-radius: 0.5rem 0 0 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                            <button type="submit" class="btn btn-primary btn-lg" style="background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); border: none; font-size: 1.1rem; border-radius: 0 0.5rem 0.5rem 0;">Analyze Item</button>
+                        </div>
+                    </form>
+                    <div class="alert alert-success text-center mt-3 mb-4">
+                        <strong>Sample QR codes to try:</strong>
+                        <ul class="mb-0 list-unstyled">
+                            <li><strong>SHIRT001</strong> - Cotton T-Shirt</li>
+                            <li><strong>JEANS001</strong> - Denim Jeans</li>
+                            <li><strong>SWEAT001</strong> - Cotton-Poly Hoodie</li>
+                            <li><strong>DRESS001</strong> - Summer Dress</li>
+                            <li><strong>SOCK001</strong> - Cotton Socks</li>
+                        </ul>
+                    </div>
+                    <br>
+                    <div class="d-flex justify-content-center mt-2">
+                        <a href="/cart" class="btn btn-warning w-75 py-2" style="font-weight: 600; font-size: 1.1rem; background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); color: white; border: none; border-radius: 0.5rem; text-decoration: none;">
+                            🛒 Go to Cart
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -123,7 +138,7 @@ Weight: ${data.item.weight_grams}g
 
     const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
     const categoryEmojis = {
-        'water_usage': '💧',
+        'water_usage': '��',
         'carbon_footprint': '🏭', 
         'energy_usage': '⚡'
     };
