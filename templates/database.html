@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="scanner-section">
+    <h2>🗃️ Database Items</h2>
+    <button class="btn" onclick="loadItems()">Refresh Items</button>
+</div>
+
+<div id="itemsList" class="results">
+Click "Refresh Items" to load all clothing items from the database.
+</div>
+
+<script>
+async function loadItems() {
+    const itemsList = document.getElementById('itemsList');
+    itemsList.innerHTML = 'Loading items...';
+    
+    try {
+        const response = await fetch('/api/items');
+        const data = await response.json();
+        
+        if (data.error) {
+            itemsList.innerHTML = `<div class="error">Error: ${data.message}</div>`;
+            return;
+        }
+        
+        if (data.length === 0) {
+            itemsList.innerHTML = 'No items found in database.';
+            return;
+        }
+        
+        let html = `📦 DATABASE ITEMS (${data.length} total)\n${'='.repeat(50)}\n\n`;
+        
+        data.forEach(item => {
+            html += `🏷️ ${item.qr_code} - ${item.item_name}\n`;
+            html += `   Brand: ${item.brand || 'N/A'}\n`;
+            html += `   Category: ${item.category || 'N/A'}\n`;
+            html += `   Weight: ${item.weight_grams}g\n`;
+            html += `   Created: ${item.created_date}\n\n`;
+        });
+        
+        itemsList.innerHTML = html;
+        
+    } catch (error) {
+        itemsList.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+    }
+}
+</script>
+{% endblock %}
