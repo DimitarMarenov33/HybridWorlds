@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome - Fashion Environmental Impact Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='cart.css') }}">
+    <style>
+        .username-container {
+            max-width: 400px;
+            margin: 80px auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            padding: 40px 30px 30px 30px;
+            text-align: center;
+        }
+        .username-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 24px;
+        }
+        .username-input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+        }
+        .username-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: bold;
+            font-size: 1.1rem;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .username-btn:hover {
+            background: linear-gradient(90deg, #764ba2 0%, #667eea 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="username-container">
+        <div class="username-title">Welcome!</div>
+        <form method="POST" action="/set_username">
+            <input type="text" name="username" class="username-input" placeholder="Enter your username" required>
+            <button type="submit" class="username-btn">Continue</button>
+        </form>
+    </div>
+</body>
+</html> 

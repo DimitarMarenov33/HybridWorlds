@@ -13,20 +13,25 @@
             <h1 class="cart-title">Your Basket ({{ cart_items|length }})</h1>
             {% if cart_items and cart_items|length > 0 %}
                 {% for item in cart_items %}
-                <div class="product-item mb-4">
+                <div class="product-item mb-4" data-item-name="{{ item.name }}">
                     <div class="product-details">
                         <h3 class="product-name">{{ item.name }}</h3>
+                        <div>
+                            <span style="font-size: 15px; color: #666;">{{ item.impact }}</span>
+                        </div>
+                        <br>
                         <div class="product-options">
                             {% for opt in item.options %}
                             <span class="product-option">{{ opt }}</span>
                             {% endfor %}
                         </div>
-                        <div class="mt-2">
-                            <span style="font-size: 14px; color: #666;">Environmental Impact: <span class="text-muted">{{ item.impact }}</span></span>
+                        <div id="analysis-panel-{{ loop.index0 }}" class="analysis-panel">
+                            <!-- Analysis results will be displayed here -->
                         </div>
                     </div>
                     <div class="product-actions">
-                        <button class="action-btn" title="Remove">🗑</button>
+                        <button class="analyze-btn" onclick="analyzeItem('{{ item.qr_code }}', {{ loop.index0 }})" style="margin-right: 8px;">🔍 Analyze Item</button>
+                        <button class="action-btn" title="Remove" onclick="deleteItem('{{ item.name }}')">🗑</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -40,14 +45,15 @@
                 <h2 class="summary-title">Summary</h2>
                 <div class="summary-row">
                     <span>{{ cart_items|length }} products</span>
+                    <span>{{ summary.subtotal }} €</span>
                 </div>
                 <div class="summary-row">
                     <span>Shipping to store</span>
                     <span class="free-badge">Free!</span>
                 </div>
                 <div class="summary-total">
-                    <span>TOTAL</span>
-                   
+                    <span>TOTAL <small style="font-weight: normal; font-size: 14px;">Taxes included</small></span>
+                    <span>{{ summary.total }} €</span>
                 </div>
                 <div class="payment-buttons">
                     <button class="gpay-btn">
@@ -79,5 +85,198 @@
             </div>
         </div>
     </div>
+
+    <script>
+        async function deleteItem(itemName) {
+            // Confirmation dialog removed
+
+            try {
+                const response = await fetch('/remove_from_cart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ item_name: itemName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Find the specific item element by its name
+                    const itemElement = document.querySelector(`[data-item-name="${itemName}"]`);
+                    
+                    if (itemElement) {
+                        // Animate the removal
+                        itemElement.style.transition = 'all 0.3s ease';
+                        itemElement.style.opacity = '0';
+                        itemElement.style.transform = 'translateX(-100%)';
+                        
+                        setTimeout(() => {
+                            // Remove the element from DOM
+                            itemElement.remove();
+                            
+                            // Update cart count in title
+                            const cartTitle = document.querySelector('.cart-title');
+                            const currentCount = parseInt(cartTitle.textContent.match(/\((\d+)\)/)[1]);
+                            const newCount = currentCount - 1;
+                            cartTitle.textContent = `Your Basket (${newCount})`;
+                            
+                            // Update summary
+                            const summaryProducts = document.querySelector('.summary-row span:first-child');
+                            if (summaryProducts) {
+                                summaryProducts.textContent = `${newCount} products`;
+                            }
+                            
+                            // Show success message
+                            showDeleteMessage(`✅ "${itemName}" removed from cart`);
+                            
+                            // Check if cart is empty
+                            const remainingItems = document.querySelectorAll('.product-item');
+                            if (remainingItems.length === 0) {
+                                const cartSection = document.querySelector('.cart-section');
+                                cartSection.innerHTML = `
+                                    <h1 class="cart-title">Your Basket (0)</h1>
+                                    <div class="alert alert-info">No items in your basket yet.</div>
+                                `;
+                            }
+                        }, 300);
+                    } else {
+                        // Fallback: reload page if element not found
+                        window.location.reload();
+                    }
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error removing item: ' + error.message);
+            }
+        }
+        
+        function showDeleteMessage(message) {
+            // Create a temporary success message
+            const messageDiv = document.createElement('div');
+            messageDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 1000;
+                font-weight: 500;
+                transition: opacity 0.3s ease;
+            `;
+            messageDiv.textContent = message;
+            
+            document.body.appendChild(messageDiv);
+            
+            // Auto-remove after 3 seconds
+            setTimeout(() => {
+                messageDiv.style.opacity = '0';
+                setTimeout(() => messageDiv.remove(), 300);
+            }, 3000);
+        }
+        
+        async function analyzeItem(qrCode, index) {
+            const panel = document.getElementById(`analysis-panel-${index}`);
+            const button = event.target;
+            
+            // Toggle panel visibility
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+                button.textContent = '🔍 Analyze Item';
+                return;
+            }
+            
+            // Show loading
+            panel.style.display = 'block';
+            panel.innerHTML = 'Analyzing item... Please wait.';
+            button.textContent = '⏳ Analyzing...';
+            
+            try {
+                const response = await fetch(`/api/analyze/${qrCode}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    panel.innerHTML = `<div style="color: red;">❌ ${data.message}</div>`;
+                } else {
+                    displayCartAnalysis(data, panel);
+                }
+            } catch (error) {
+                panel.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
+            }
+            
+            button.textContent = '🔍 Hide Analysis';
+        }
+        
+        function displayCartAnalysis(data, panel) {
+            let html = `
+🏷️ ITEM ANALYSIS: ${data.item.item_name}
+${'='.repeat(50)}
+
+📋 ITEM DETAILS:
+QR Code: ${data.item.qr_code}
+Name: ${data.item.item_name}
+Brand: ${data.item.brand || 'N/A'}
+Category: ${data.item.category || 'N/A'}
+Weight: ${data.item.weight_grams}g
+
+🧵 MATERIAL COMPOSITION:`;
+
+            data.materials.forEach(material => {
+                html += `\n• ${material.material_name.charAt(0).toUpperCase() + material.material_name.slice(1)}: ${material.percentage}%`;
+            });
+
+            html += `\n\n🌍 ENVIRONMENTAL IMPACT ANALYSIS:\n${'-'.repeat(50)}`;
+
+            const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
+            const categoryEmojis = {
+                'water_usage': '💧',
+                'carbon_footprint': '🏭', 
+                'energy_usage': '⚡'
+            };
+
+            categoryOrder.forEach(category => {
+                if (data.impacts[category]) {
+                    const impact = data.impacts[category];
+                    html += `\n\n${categoryEmojis[category]} ${impact.name.split(' ').slice(1).join(' ')}:`;
+                    
+                    impact.materials.forEach(mat => {
+                        html += `\n  ${mat.material}: ${mat.impact.toFixed(2)} ${impact.unit} for this ${data.item.weight_grams}g item`;
+                        html += `\n    (calculation: ${mat.percentage}% × ${mat.base_impact} ${mat.unit.replace('/kg', '/kg')} × ${(data.item.weight_grams/1000).toFixed(3)}kg)`;
+                    });
+                    
+                    html += `\n  TOTAL: ${impact.value.toFixed(2)} ${impact.unit}`;
+                }
+            });
+
+            html += `\n\n${'='.repeat(50)}`;
+            html += `\n📊 TOTAL IMPACT FOR THIS ${data.item.weight_grams}g ITEM:`;
+            
+            categoryOrder.forEach(category => {
+                if (data.impacts[category]) {
+                    const impact = data.impacts[category];
+                    const name = impact.name.split(' ').slice(1).join(' ');
+                    html += `\n${name}: ${impact.value.toFixed(2)} ${impact.unit}`;
+                }
+            });
+
+            // Add water consumption visualization
+            if (data.tube_scale !== undefined) {
+                html += `\n\n💧 WATER CONSUMPTION VISUALIZATION:`;
+                html += `\n<div class="tube-visualization">`;
+                html += `\n<div class="tube">`;
+                html += `\n<div class="tube-fill" style="height: ${Math.min((data.tube_scale / 400) * 100, 100)}%;"></div>`;
+                html += `\n</div>`;
+                html += `\n<div class="tube-label">${data.tube_scale}ml / 400ml</div>`;
+                html += `\n<p><small>Scale: 0.7L (best) = 0.06ml | 4,800L (worst) = 400ml (full tube)</small></p>`;
+                html += `\n</div>`;
+            }
+
+            panel.innerHTML = html;
+        }
+    </script>
 </body>
 </html> 

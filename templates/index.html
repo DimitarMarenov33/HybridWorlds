@@ -6,29 +6,28 @@
         <div class="col-md-7 col-lg-6">
             <div class="card shadow-sm">
                 <div class="card-body p-4">
-                    <h4 class="mb-4 text-center"><span class="me-2">🏷️</span>Enter Item QR Code</h4>
-                    <form class="mb-3">
+                    <h4 class="mb-4 text-center"><span class="me-2"></span>Enter Item QR Code</h4>
+                    <form class="mb-3" onsubmit="addItemToCart(); return false;" style="position: relative;">
                         <div class="input-group">
-                            <input type="text" class="form-control form-control-lg" placeholder="Enter QR code (e.g., SHIRT001)" style="border-radius: 0.5rem 0 0 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                            <button type="submit" class="btn btn-primary btn-lg" style="background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); border: none; font-size: 1.1rem; border-radius: 0 0.5rem 0.5rem 0;">Analyze Item</button>
+                            <input type="text" id="qrInput" class="form-control form-control-lg" placeholder="Enter QR code (e.g., SHIRT001)" style="border-radius: 0.5rem 0 0 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" autocomplete="off">
+                            <button type="submit" class="btn btn-success btn-lg" style="background: linear-gradient(90deg, #28a745 0%, #20c997 100%); border: none; font-size: 1.1rem; border-radius: 0 0.5rem 0 0;">Add to Cart</button>
+                            <a href="/cart" class="btn btn-primary btn-lg" style="background: linear-gradient(90deg, #007bff 0%, #20c997 100%); border: none; font-size: 1.1rem; border-radius: 0 0.5rem 0.5rem 0; margin-left: 2px; text-decoration: none;">Go to Cart</a>
                         </div>
+                        <div id="suggestions" class="suggestions-dropdown" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
+                        <div id="successMessage" class="mt-2" style="display: none;"></div>
                     </form>
                     <div class="alert alert-success text-center mt-3 mb-4">
                         <strong>Sample QR codes to try:</strong>
                         <ul class="mb-0 list-unstyled">
-                            <li><strong>SHIRT001</strong> - Cotton T-Shirt</li>
-                            <li><strong>JEANS001</strong> - Denim Jeans</li>
-                            <li><strong>SWEAT001</strong> - Cotton-Poly Hoodie</li>
-                            <li><strong>DRESS001</strong> - Summer Dress</li>
-                            <li><strong>SOCK001</strong> - Cotton Socks</li>
+                            <li>SOCK001 - Cotton Socks</li>
+                            <li>SHIRT001 - Cotton T-Shirt</li>
+                            <li>SWEAT001 - Cotton-Poly Hoodie</li>
+                            <li>JEANS001 - Denim Jeans</li>
+                            <li>TIE001 - Silk Tie</li>
                         </ul>
                     </div>
                     <br>
-                    <div class="d-flex justify-content-center mt-2">
-                        <a href="/cart" class="btn btn-warning w-75 py-2" style="font-weight: 600; font-size: 1.1rem; background: linear-gradient(90deg, #6a11cb 0%, #2575fc 100%); color: white; border: none; border-radius: 0.5rem; text-decoration: none;">
-                            🛒 Go to Cart
-                        </a>
-                    </div>
+                   
                 </div>
             </div>
         </div>
@@ -61,6 +60,63 @@ The analysis will show:
 document.getElementById('qrInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         analyzeItem();
+    }
+});
+
+// Autocomplete functionality
+let debounceTimer;
+
+document.getElementById('qrInput').addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        hideSuggestions();
+        return;
+    }
+    
+    debounceTimer = setTimeout(() => {
+        fetchSuggestions(query);
+    }, 300);
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#qrInput') && !e.target.closest('#suggestions')) {
+        hideSuggestions();
+    }
+});
+
+// Keyboard navigation
+document.getElementById('qrInput').addEventListener('keydown', function(e) {
+    const suggestions = document.querySelectorAll('.suggestion-item');
+    const activeSuggestion = document.querySelector('.suggestion-item.active');
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!activeSuggestion) {
+            suggestions[0]?.classList.add('active');
+        } else {
+            const nextIndex = Array.from(suggestions).indexOf(activeSuggestion) + 1;
+            if (nextIndex < suggestions.length) {
+                activeSuggestion.classList.remove('active');
+                suggestions[nextIndex].classList.add('active');
+            }
+        }
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (activeSuggestion) {
+            const prevIndex = Array.from(suggestions).indexOf(activeSuggestion) - 1;
+            activeSuggestion.classList.remove('active');
+            if (prevIndex >= 0) {
+                suggestions[prevIndex].classList.add('active');
+            }
+        }
+    } else if (e.key === 'Enter' && activeSuggestion) {
+        e.preventDefault();
+        selectSuggestion(activeSuggestion.dataset.qrCode);
+    } else if (e.key === 'Escape') {
+        hideSuggestions();
     }
 });
 
@@ -138,7 +194,7 @@ Weight: ${data.item.weight_grams}g
 
     const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
     const categoryEmojis = {
-        'water_usage': '��',
+        'water_usage': '💧',
         'carbon_footprint': '🏭', 
         'energy_usage': '⚡'
     };
@@ -168,6 +224,12 @@ Weight: ${data.item.weight_grams}g
         }
     });
 
+    // Add "Add to Cart" button
+    html += `\n\n${'='.repeat(50)}`;
+    html += `\n<button onclick="addToCart('${data.item.item_name}', '${data.item.qr_code}', '${getEnvironmentalSummary(data.impacts)}')" class="btn btn-success" style="margin-top: 20px; padding: 10px 20px; font-size: 1.1rem;">
+        🛒 Add to Cart
+    </button>`;
+
     resultsDiv.innerHTML = html;
     
     // Update tube visualization
@@ -178,5 +240,157 @@ Weight: ${data.item.weight_grams}g
         tubeSection.style.display = 'block';
     }
 }
+
+function getEnvironmentalSummary(impacts) {
+    let summary = [];
+    if (impacts.water_usage) {
+        summary.push(`Water: ${impacts.water_usage.value.toFixed(2)} ${impacts.water_usage.unit}`);
+    }
+    if (impacts.carbon_footprint) {
+        summary.push(`Carbon: ${impacts.carbon_footprint.value.toFixed(2)} ${impacts.carbon_footprint.unit}`);
+    }
+    if (impacts.energy_usage) {
+        summary.push(`Energy: ${impacts.energy_usage.value.toFixed(2)} ${impacts.energy_usage.unit}`);
+    }
+    return summary.join(' | ');
+}
+
+async function addItemToCart() {
+    const qrCode = document.getElementById('qrInput').value.trim();
+    const resultsDiv = document.getElementById('results');
+    const successMessageDiv = document.getElementById('successMessage');
+    
+    if (!qrCode) {
+        showMessage('Please enter a QR code', 'error');
+        return;
+    }
+    
+    hideMessage();
+    
+    try {
+        // First, get item details from the API
+        const response = await fetch(`/api/analyze/${qrCode}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            displayError(data.message, data.available_items);
+        } else {
+            // Add item to cart
+            const environmentalImpact = getEnvironmentalSummary(data.impacts);
+            const cartResponse = await addToCart(data.item.item_name, data.item.qr_code, environmentalImpact);
+            
+            if (cartResponse.success) {
+                showMessage(`✅ ${data.item.item_name} successfully added to cart!`, 'success');
+                // Clear the input
+                document.getElementById('qrInput').value = '';
+            } else {
+                showMessage(cartResponse.message, 'error');
+            }
+        }
+    } catch (error) {
+        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+    }
+}
+
+function showMessage(message, type) {
+    const successMessageDiv = document.getElementById('successMessage');
+    successMessageDiv.innerHTML = `<div class="alert alert-${type === 'success' ? 'success' : 'danger'}">${message}</div>`;
+    successMessageDiv.style.display = 'block';
+    
+    // Auto-hide success messages after 3 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            hideMessage();
+        }, 3000);
+    }
+}
+
+function hideMessage() {
+    const successMessageDiv = document.getElementById('successMessage');
+    successMessageDiv.style.display = 'none';
+}
+
+async function addToCart(itemName, qrCode, environmentalImpact) {
+    try {
+        const response = await fetch('/add_to_cart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `item_name=${encodeURIComponent(itemName)}&qr_code=${encodeURIComponent(qrCode)}&environmental_impact=${encodeURIComponent(environmentalImpact)}`
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        return { success: false, message: 'Error adding item to cart: ' + error.message };
+    }
+}
+
+async function fetchSuggestions(query) {
+    try {
+        const response = await fetch(`/api/suggestions/${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+            showSuggestions(data.suggestions);
+        } else {
+            hideSuggestions();
+        }
+    } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        hideSuggestions();
+    }
+}
+
+function showSuggestions(suggestions) {
+    const suggestionsDiv = document.getElementById('suggestions');
+    suggestionsDiv.innerHTML = '';
+    
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.dataset.qrCode = suggestion.qr_code;
+        item.innerHTML = `
+            <div style="padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s;">
+                <div style="font-weight: 600; color: #333;">${suggestion.qr_code}</div>
+                <div style="font-size: 0.9em; color: #666;">${suggestion.item_name}</div>
+            </div>
+        `;
+        
+        item.addEventListener('click', () => selectSuggestion(suggestion.qr_code));
+        item.addEventListener('mouseenter', () => {
+            document.querySelectorAll('.suggestion-item').forEach(s => s.classList.remove('active'));
+            item.classList.add('active');
+        });
+        
+        suggestionsDiv.appendChild(item);
+    });
+    
+    suggestionsDiv.style.display = 'block';
+}
+
+function selectSuggestion(qrCode) {
+    document.getElementById('qrInput').value = qrCode;
+    hideSuggestions();
+    // Optionally auto-submit the form
+    addItemToCart();
+}
+
+function hideSuggestions() {
+    document.getElementById('suggestions').style.display = 'none';
+}
+
+// Add CSS for active suggestion
+const style = document.createElement('style');
+style.textContent = `
+    .suggestion-item.active {
+        background-color: #f8f9fa !important;
+    }
+    .suggestion-item:hover {
+        background-color: #f8f9fa;
+    }
+`;
+document.head.appendChild(style);
 </script>
 {% endblock %}

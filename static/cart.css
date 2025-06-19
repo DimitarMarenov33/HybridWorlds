@@ -276,4 +276,56 @@ body {
     .payment-buttons {
         flex-direction: column;
     }
+}
+
+.analyze-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 10px;
+}
+.analyze-btn:hover {
+    background: #0056b3;
+}
+.analysis-panel {
+    display: none;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    white-space: pre-wrap;
+}
+.tube-visualization {
+    margin: 20px 0;
+    text-align: center;
+}
+.tube {
+    width: 60px;
+    height: 200px;
+    border: 3px solid #333;
+    border-radius: 30px;
+    margin: 0 auto;
+    position: relative;
+    background: #f0f0f0;
+    overflow: hidden;
+}
+.tube-fill {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    background: linear-gradient(to top, #3498db, #85c1e9);
+    transition: height 0.8s ease;
+    border-radius: 0 0 27px 27px;
+}
+.tube-label {
+    margin-top: 15px;
+    font-weight: bold;
+    font-size: 18px;
 } 

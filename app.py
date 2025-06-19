@@ -1,9 +1,10 @@
 # app.py - Add this file to your existing project
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import sqlite3
 import os
 
 app = Flask(__name__)
+app.secret_key = 'your_secret_key_here'  # Needed for session
 
 # Use your existing database class structure
 class FashionEnvironmentDB:
@@ -60,10 +61,34 @@ class FashionEnvironmentDB:
 # Initialize database
 db = FashionEnvironmentDB()
 
-@app.route('/')
+@app.route('/', methods=['GET'])
+def username_page():
+    if 'username' in session:
+        return redirect(url_for('index'))
+    return render_template('username.html')
+
+@app.route('/set_username', methods=['POST'])
+def set_username():
+    username = request.form.get('username')
+    if username:
+        session['username'] = username
+        # Save username to the database if not already present
+        conn = sqlite3.connect('fashion_env.db')
+        cursor = conn.cursor()
+        cursor.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE)''')
+        cursor.execute('''INSERT OR IGNORE INTO users (username) VALUES (?)''', (username,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('index'))
+    return redirect(url_for('username_page'))
+
+@app.route('/index')
 def index():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('username_page'))
     """Main page with QR scanner"""
-    return render_template('index.html')
+    return render_template('index.html', username=username)
 
 @app.route('/api/analyze/<qr_code>')
 def analyze_item(qr_code):
@@ -168,22 +193,109 @@ def get_all_items():
 
 @app.route("/cart")
 def cart():
-    cart_items = [
-        {
-            "name": "Flared trousers with linen",
-            "image_url": "",
-            "price": "22,99",
-            "quantity": 1,
-            "impact": "Low"
-        }
-        # Add more items as needed
-    ]
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('username_page'))
+    
+    cart_items = session.get('cart_items', [])
     summary = {
-        "subtotal": "22,99",
-        "total": "22,99",
+        "subtotal": "0.00",
+        "total": "0.00",
         "free_shipping_threshold": "22.01"
     }
-    return render_template("cart.html", cart_items=cart_items, summary=summary, hide_nav=True)
+    return render_template("cart.html", cart_items=cart_items, summary=summary, hide_nav=True, username=username)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('username_page'))
+
+@app.route('/add_to_cart', methods=['POST'])
+def add_to_cart():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('username_page'))
+    
+    # Get item details from the form
+    item_name = request.form.get('item_name')
+    qr_code = request.form.get('qr_code')
+    environmental_impact = request.form.get('environmental_impact')
+    
+    # Initialize cart in session if it doesn't exist
+    if 'cart_items' not in session:
+        session['cart_items'] = []
+    
+    # Check if cart already has 3 items
+    if len(session['cart_items']) >= 3:
+        return jsonify({'success': False, 'message': 'Maximum 3 items allowed in cart'})
+    
+    # Add item to cart
+    cart_item = {
+        'name': item_name,
+        'qr_code': qr_code,
+        'impact': environmental_impact,
+        'price': '0.00',  # Placeholder
+        'quantity': 1
+    }
+    
+    session['cart_items'].append(cart_item)
+    session.modified = True
+    
+    return jsonify({'success': True, 'message': 'Item added to cart'})
+
+@app.route('/api/suggestions/<query>')
+def get_suggestions(query):
+    """Get QR code suggestions based on user input"""
+    try:
+        # Get all clothing items from database
+        items = db.list_all_clothing_items()
+        
+        # Filter items that match the query (case-insensitive)
+        suggestions = []
+        query_lower = query.lower()
+        
+        for item in items:
+            if (query_lower in item['qr_code'].lower() or 
+                query_lower in item['item_name'].lower()):
+                suggestions.append({
+                    'qr_code': item['qr_code'],
+                    'item_name': item['item_name']
+                })
+        
+        return jsonify({'suggestions': suggestions[:5]})  # Limit to 5 suggestions
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+@app.route('/remove_from_cart', methods=['POST'])
+def remove_from_cart():
+    """Remove an item from the cart"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'message': 'User not logged in'})
+    
+    try:
+        data = request.get_json()
+        item_name = data.get('item_name')
+        
+        if not item_name:
+            return jsonify({'success': False, 'message': 'Item name is required'})
+        
+        # Get current cart
+        cart = session.get('cart_items', [])
+        
+        # Find and remove the item
+        original_length = len(cart)
+        cart = [item for item in cart if item['name'] != item_name]
+        
+        if len(cart) == original_length:
+            return jsonify({'success': False, 'message': 'Item not found in cart'})
+        
+        # Update session
+        session['cart_items'] = cart
+        
+        return jsonify({'success': True, 'message': 'Item removed from cart'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error removing item: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
