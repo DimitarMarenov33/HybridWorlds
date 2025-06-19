@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fashion Environmental Impact Analyzer</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
 </head>
 <body>
     <div class="container">
@@ -14,7 +14,7 @@
                 {% if username %}
                     <h1>Welcome, {{ username }}</h1>
                 {% else %}
-                    <h1>🌍 Fashion Environmental Impact Analyzer</h1>
+                    <h1 style="margin-left: 50px;">Fashion Environmental Impact Analyzer</h1>
                     <p>Discover the true environmental cost of your clothing</p>
                 {% endif %}
                 </div>

@@ -191,6 +191,11 @@ def get_all_items():
     except Exception as e:
         return jsonify({'error': True, 'message': str(e)})
 
+def normalize(value, best, worst):
+    if worst == best:
+        return 1.0
+    return max(0, min(1, (worst - value) / (worst - best)))
+
 @app.route("/cart")
 def cart():
     username = session.get('username')
@@ -203,7 +208,44 @@ def cart():
         "total": "0.00",
         "free_shipping_threshold": "22.01"
     }
-    return render_template("cart.html", cart_items=cart_items, summary=summary, hide_nav=True, username=username)
+
+    minmax = {
+        'water_usage': (5.91996, 6000),
+        'carbon_footprint': (0.9, 10.4),
+        'energy_usage': (1.09323, 138)
+    }
+    
+    def get_item_score(qr_code):
+        impacts = {}
+        item = db.get_clothing_item(qr_code)
+        if not item:
+            return None
+        materials = db.get_material_composition(qr_code)
+        for category in minmax:
+            total = 0
+            for mat in materials:
+                impact_data = db.get_environmental_impact(mat['material_name'], category)
+                if impact_data:
+                    total += impact_data['impact_value'] * (mat['percentage']/100) * (item['weight_grams']/1000)
+            impacts[category] = total
+        scores = [normalize(impacts[cat], minmax[cat][0], minmax[cat][1]) for cat in minmax]
+        return sum(scores) / len(scores) * 100
+    
+    item_scores = []
+    if cart_items:
+        for item in cart_items:
+            score = get_item_score(item['qr_code'])
+            if score is not None:
+                item_scores.append({'name': item['name'], 'score': round(score, 1)})
+        scores = [s['score'] for s in item_scores]
+        if scores:
+            sustainability_score = round(sum(scores) / len(scores), 1)
+        else:
+            sustainability_score = None
+    else:
+        sustainability_score = None
+    
+    return render_template("cart.html", cart_items=cart_items, summary=summary, hide_nav=True, username=username, sustainability_score=sustainability_score, item_scores=item_scores)
 
 @app.route('/logout')
 def logout():
@@ -296,6 +338,23 @@ def remove_from_cart():
         
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error removing item: {str(e)}'})
+
+@app.route('/save_choice', methods=['POST'])
+def save_choice():
+    data = request.get_json()
+    session['last_choice'] = data
+    session.modified = True
+    return jsonify({'success': True})
+
+@app.route('/clear_cart', methods=['POST'])
+def clear_cart():
+    session['cart_items'] = []
+    session.modified = True
+    return jsonify({'success': True})
+
+@app.route('/get_last_choice')
+def get_last_choice():
+    return jsonify(session.get('last_choice', {}))
 
 if __name__ == '__main__':
     app.run(debug=True)

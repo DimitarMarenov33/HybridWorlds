@@ -1,3 +1,4 @@
+/* CSS moved from base.html */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -23,7 +24,12 @@ body {
     text-align: center;
 }
 
-.header h1 { font-size: 2.5em; margin-bottom: 10px; }
+.header h1 { 
+    font-size: 2.5em; 
+    margin-bottom: 10px; 
+    text-align: center;
+    width: 100%;
+}
 
 .nav {
     background: #34495e;
@@ -142,44 +148,8 @@ body {
     margin: 20px 0;
 }
 
-.product-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 0;
-    border-bottom: 1px solid #eee;
-}
-
-.product-details {
-    flex: 1 1 0%;
-    min-width: 0;
-}
-
-.product-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-left: 24px;
-}
-
-.analyze-btn, .action-btn {
-    min-width: 120px;
-    margin: 0 0 0 0;
-}
-
 @media (max-width: 768px) {
     .input-group { flex-direction: column; }
     .nav-links { flex-direction: column; }
     .content { padding: 20px; }
-}
-
-@media (max-width: 600px) {
-    .product-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    .product-actions {
-        margin-left: 0;
-        margin-top: 10px;
-    }
 } 

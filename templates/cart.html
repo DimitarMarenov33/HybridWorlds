@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fashion Environmental Impact Analyzer - Cart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='cart.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cart.css') }}">
 </head>
 <body>
     <div class="container">
@@ -52,35 +52,27 @@
                     <span class="free-badge">Free!</span>
                 </div>
                 <div class="summary-total">
-                    <span>TOTAL <small style="font-weight: normal; font-size: 14px;">Taxes included</small></span>
-                    <span>{{ summary.total }} €</span>
+                    <span>FINAL SUSTAINABILITY SCORE</span>
+                    <span style="font-size: 1.3em; font-weight: bold; color: #388e3c;">{{ sustainability_score if sustainability_score is not none else 'N/A' }}%</span>
                 </div>
-                <div class="payment-buttons">
-                    <button class="gpay-btn">
-                        <span style="color: #4285f4;">G</span> Pay
+                {% if item_scores %}
+                <div style="margin-bottom: 15px;">
+                    <button class="score-toggle-btn" type="button" onclick="toggleScoreDetails()">
+                        Show item scores <span id="score-chevron" class="score-chevron">▼</span>
                     </button>
-                    <button class="process-btn">PROCESS ORDER</button>
-                </div>
-                <div class="delivery-info">
-                    <span>🚚</span>
-                    <span>Free home delivery if you add another <strong>{{ summary.free_shipping_threshold }} €</strong> (only products from the new collection without discount).</span>
-                </div>
-                <div class="info-item">
-                    <span>ℹ️</span>
-                    <span>The items are not reserved. Too bad to miss this chance, right?</span>
-                </div>
-                <div class="promo-section">
-                    <div class="info-item" style="margin: 0;">
-                        <span>%</span>
-                        <span>Do you have a promo code?</span>
+                    <div id="score-details" style="display:none; background:#f8f9fa; border-radius:8px; margin-top:8px; padding:10px 15px;">
+                        <ul style="list-style:none; padding-left:0; margin:0;">
+                            {% for item in item_scores %}
+                            <li style="margin-bottom:6px;"><span style="font-weight:600;">{{ item.name }}</span>: <span style="color:#388e3c; font-weight:500;">{{ item.score }}%</span></li>
+                            {% endfor %}
+                        </ul>
                     </div>
-                    <span>></span>
                 </div>
-                <div class="gift-section">
-                    <div class="info-item" style="margin: 0;">
-                        <span>🎁</span>
-                        <span>Choose gift options later</span>
-                    </div>
+                {% endif %}
+                <div class="payment-buttons">
+                    <button id="pay-btn" class="gpay-btn" style="width:100%;">
+                        <span style="color: #388e3c; font-weight:600;">Pay</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -277,6 +269,158 @@ Weight: ${data.item.weight_grams}g
 
             panel.innerHTML = html;
         }
+
+        function toggleScoreDetails() {
+            var details = document.getElementById('score-details');
+            var chevron = document.getElementById('score-chevron');
+            if (details.style.display === 'none' || details.style.display === '') {
+                details.style.display = 'block';
+                chevron.classList.add('open');
+            } else {
+                details.style.display = 'none';
+                chevron.classList.remove('open');
+            }
+        }
+
+        async function getSustainabilityScore() {
+            // Get the score from the page (already rendered by Flask)
+            return {{ sustainability_score if sustainability_score is not none else 'null' }};
+        }
+
+        async function getLastChoice() {
+            // Fetch from session via a hidden endpoint (Flask session is server-side)
+            try {
+                const res = await fetch('/static/last_choice.json'); // fallback if you want to persist
+                if (res.ok) return await res.json();
+            } catch {}
+            return null;
+        }
+
+        document.getElementById('pay-btn').addEventListener('click', async function() {
+            const cartItems = {{ cart_items|tojson }};
+            const sustainabilityScore = {{ sustainability_score if sustainability_score is not none else 'null' }};
+            if (!cartItems.length) {
+                alert('Your cart is empty!');
+                return;
+            }
+            // Fetch previous choice for comparison BEFORE saving the new one
+            let prevChoice = null;
+            try {
+                const res = await fetch('/get_last_choice');
+                if (res.ok) prevChoice = await res.json();
+            } catch {}
+            const now = new Date();
+            const dateStr = now.toLocaleString();
+            let receiptHtml = `<div style='max-width:700px;margin:0 auto;font-family:Segoe UI,Arial,sans-serif;'>`;
+            receiptHtml += `<div style='text-align:center;margin-bottom:18px;'>`;
+            receiptHtml += `<div style='font-size:2em;font-weight:700;color:#388e3c;'>{{ username }}'s Fashion Choices</div>`;
+            receiptHtml += `<div style='font-size:1em;color:#888;'>${dateStr}</div>`;
+            receiptHtml += `</div>`;
+            // Section 1: Previous Choice
+            if (prevChoice && prevChoice.items && prevChoice.items.length) {
+                receiptHtml += `<h2 style='text-align:center;margin-bottom:10px;color:#1976d2;'>Previous Choice</h2>`;
+                receiptHtml += `<table style='width:100%;border-collapse:collapse;margin-bottom:10px;'>`;
+                receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Item</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Water</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Carbon</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Energy</th></tr></thead><tbody>`;
+                for (const item of prevChoice.items) {
+                    receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>${item.name}</strong></td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.water}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.carbon}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.energy}</td></tr>`;
+                }
+                receiptHtml += `</tbody></table>`;
+                receiptHtml += `<div style='background:#e8f5e9;padding:12px 10px;border-radius:8px;text-align:center;margin-bottom:18px;'>`;
+                receiptHtml += `<div style='font-size:1.1em;font-weight:600;color:#388e3c;margin-bottom:4px;'>Total Environmental Impact</div>`;
+                receiptHtml += `<div style='font-size:1.05em;'><strong>Water:</strong> ${prevChoice.total.water.toFixed(2)} L</div>`;
+                receiptHtml += `<div style='font-size:1.05em;'><strong>Carbon:</strong> ${prevChoice.total.carbon.toFixed(2)} kg_CO2</div>`;
+                receiptHtml += `<div style='font-size:1.05em;'><strong>Energy:</strong> ${prevChoice.total.energy.toFixed(2)} MJ</div>`;
+                receiptHtml += `<div style='font-size:1.1em;margin-top:8px;'><strong>Sustainability Score:</strong> <span style='color:#388e3c;'>${prevChoice.score !== null ? prevChoice.score + '%' : 'N/A'}</span></div>`;
+                receiptHtml += `</div>`;
+            }
+            // Section 2: Current Choice
+            receiptHtml += `<h2 style='text-align:center;margin-bottom:10px;color:#388e3c;'>Current Choice</h2>`;
+            receiptHtml += `<table style='width:100%;border-collapse:collapse;margin-bottom:10px;'>`;
+            receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Item</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Water</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Carbon</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Energy</th></tr></thead><tbody>`;
+            let total = {water: 0, carbon: 0, energy: 0};
+            let itemImpacts = [];
+            for (const item of cartItems) {
+                let res = await fetch(`/api/analyze/${item.qr_code}`);
+                let data = await res.json();
+                let w = data.impacts.water_usage ? `${data.impacts.water_usage.value.toFixed(2)} ${data.impacts.water_usage.unit}` : '-';
+                let c = data.impacts.carbon_footprint ? `${data.impacts.carbon_footprint.value.toFixed(2)} ${data.impacts.carbon_footprint.unit}` : '-';
+                let e = data.impacts.energy_usage ? `${data.impacts.energy_usage.value.toFixed(2)} ${data.impacts.energy_usage.unit}` : '-';
+                if (data.impacts.water_usage) total.water += data.impacts.water_usage.value;
+                if (data.impacts.carbon_footprint) total.carbon += data.impacts.carbon_footprint.value;
+                if (data.impacts.energy_usage) total.energy += data.impacts.energy_usage.value;
+                itemImpacts.push({name: data.item.item_name, water: w, carbon: c, energy: e});
+                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>${data.item.item_name}</strong></td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${w}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${c}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${e}</td></tr>`;
+            }
+            receiptHtml += `</tbody></table>`;
+            receiptHtml += `<div style='background:#e8f5e9;padding:12px 10px;border-radius:8px;text-align:center;margin-bottom:18px;'>`;
+            receiptHtml += `<div style='font-size:1.1em;font-weight:600;color:#388e3c;margin-bottom:4px;'>Total Environmental Impact</div>`;
+            receiptHtml += `<div style='font-size:1.05em;'><strong>Water:</strong> ${total.water.toFixed(2)} L</div>`;
+            receiptHtml += `<div style='font-size:1.05em;'><strong>Carbon:</strong> ${total.carbon.toFixed(2)} kg_CO2</div>`;
+            receiptHtml += `<div style='font-size:1.05em;'><strong>Energy:</strong> ${total.energy.toFixed(2)} MJ</div>`;
+            receiptHtml += `<div style='font-size:1.1em;margin-top:8px;'><strong>Sustainability Score:</strong> <span style='color:#388e3c;'>${sustainabilityScore !== null ? sustainabilityScore + '%' : 'N/A'}</span></div>`;
+            receiptHtml += `</div>`;
+            // Section 3: Comparison
+            if (prevChoice && prevChoice.items && prevChoice.items.length) {
+                receiptHtml += `<hr><h3 style='text-align:center;margin-top:24px;'>Comparison</h3>`;
+                receiptHtml += `<div style='background:#e3f2fd;padding:14px 10px;border-radius:8px;text-align:center;margin-top:12px;'>`;
+                receiptHtml += `<table style='width:100%;border-collapse:collapse;margin:0 auto 10px auto;'>`;
+                receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Metric</th><th style='text-align:center;padding:8px 4px;border-bottom:1px solid #ddd;'>Previous Choice</th><th style='text-align:center;padding:8px 4px;border-bottom:1px solid #ddd;'>Current Choice</th></tr></thead><tbody>`;
+                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Water (L)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.water.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.water.toFixed(2)}</td></tr>`;
+                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Carbon (kg_CO₂)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.carbon.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.carbon.toFixed(2)}</td></tr>`;
+                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Energy (MJ)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.energy.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.energy.toFixed(2)}</td></tr>`;
+                receiptHtml += `<tr><td style='padding:6px 4px;'><strong>Sustainability Score</strong></td><td style='text-align:center; color:#1976d2; font-weight:600;'>${prevChoice.score !== null ? prevChoice.score + '%' : 'N/A'}</td><td style='text-align:center; color:#388e3c; font-weight:600;'>${sustainabilityScore !== null ? sustainabilityScore + '%' : 'N/A'}</td></tr>`;
+                receiptHtml += `</tbody></table>`;
+                receiptHtml += `</div>`;
+            }
+            receiptHtml += `</div>`;
+            receiptHtml += `</div>`;
+            const printWindow = window.open('', '', 'width=700,height=900');
+            const printStyles = `
+              <style>
+                body { background: #f5f5f5; margin: 0; padding: 0; }
+                .receipt-container {
+                  max-width: 420px;
+                  margin: 24px auto;
+                  background: #fff;
+                  border-radius: 12px;
+                  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+                  padding: 24px 18px 32px 18px;
+                  font-family: 'Segoe UI', Arial, sans-serif;
+                }
+                h2, h3 { margin-top: 0; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+                th, td { padding: 8px 4px; }
+                th { background: #f8f9fa; border-bottom: 1px solid #ddd; }
+                td { border-bottom: 1px solid #eee; }
+                .total-section, .compare-section {
+                  border-radius: 8px;
+                  margin-top: 18px;
+                  padding: 14px 10px;
+                  text-align: center;
+                }
+                .total-section { background: #e8f5e9; }
+                .compare-section { background: #e3f2fd; }
+                @media print {
+                  body { background: #fff; }
+                  .receipt-container { box-shadow: none; margin: 0; }
+                }
+              </style>
+            `;
+            printWindow.document.write(`<html><head><title>Receipt</title>${printStyles}</head><body><div class='receipt-container'>${receiptHtml}</div></body></html>`);
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+            // After printing, save the current choice as the new last_choice
+            await fetch('/save_choice', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    items: itemImpacts,
+                    total: {water: total.water, carbon: total.carbon, energy: total.energy},
+                    score: sustainabilityScore
+                })
+            });
+        });
     </script>
 </body>
 </html> 

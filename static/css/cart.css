@@ -328,4 +328,37 @@ body {
     margin-top: 15px;
     font-weight: bold;
     font-size: 18px;
+}
+
+.score-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 0;
+    background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+    color: #155724;
+    border: none;
+    border-radius: 999px;
+    font-size: 1.05em;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(67,233,123,0.08);
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+    margin-top: 8px;
+    margin-bottom: 0;
+    outline: none;
+    position: relative;
+}
+.score-toggle-btn:hover, .score-toggle-btn:focus {
+    background: linear-gradient(90deg, #38f9d7 0%, #43e97b 100%);
+    box-shadow: 0 4px 16px rgba(67,233,123,0.15);
+}
+.score-chevron {
+    margin-left: 10px;
+    font-size: 1.2em;
+    transition: transform 0.3s;
+}
+.score-chevron.open {
+    transform: rotate(180deg);
 } 
