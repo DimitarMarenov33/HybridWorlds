@@ -30,8 +30,8 @@
                         </div>
                     </div>
                     <div class="product-actions">
-                        <button class="analyze-btn" onclick="analyzeItem('{{ item.qr_code }}', {{ loop.index0 }})" style="margin-right: 8px;">🔍 Analyze Item</button>
-                        <button class="action-btn" title="Remove" onclick="deleteItem('{{ item.name }}')">🗑</button>
+                        <button class="analyze-btn" onclick="analyzeItem('{{ item.qr_code }}', {{ loop.index0 }})" style="margin-right: 8px;">Analyze Item</button>
+                        <button class="action-btn" title="Remove" onclick="deleteItem('{{ item.name }}')">🗑️</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -105,32 +105,9 @@
                         
                         setTimeout(() => {
                             // Remove the element from DOM
-                            itemElement.remove();
-                            
-                            // Update cart count in title
-                            const cartTitle = document.querySelector('.cart-title');
-                            const currentCount = parseInt(cartTitle.textContent.match(/\((\d+)\)/)[1]);
-                            const newCount = currentCount - 1;
-                            cartTitle.textContent = `Your Basket (${newCount})`;
-                            
-                            // Update summary
-                            const summaryProducts = document.querySelector('.summary-row span:first-child');
-                            if (summaryProducts) {
-                                summaryProducts.textContent = `${newCount} products`;
-                            }
-                            
-                            // Show success message
-                            showDeleteMessage(`✅ "${itemName}" removed from cart`);
-                            
-                            // Check if cart is empty
-                            const remainingItems = document.querySelectorAll('.product-item');
-                            if (remainingItems.length === 0) {
-                                const cartSection = document.querySelector('.cart-section');
-                                cartSection.innerHTML = `
-                                    <h1 class="cart-title">Your Basket (0)</h1>
-                                    <div class="alert alert-info">No items in your basket yet.</div>
-                                `;
-                            }
+                            //itemElement.remove();
+                            // Instead, reload the page for full sync
+                            window.location.reload();
                         }, 300);
                     } else {
                         // Fallback: reload page if element not found
@@ -178,21 +155,21 @@
             // Toggle panel visibility
             if (panel.style.display === 'block') {
                 panel.style.display = 'none';
-                button.textContent = '🔍 Analyze Item';
+                button.textContent = 'Analyze Item';
                 return;
             }
             
             // Show loading
             panel.style.display = 'block';
             panel.innerHTML = 'Analyzing item... Please wait.';
-            button.textContent = '⏳ Analyzing...';
+            button.textContent = 'Analyzing...';
             
             try {
                 const response = await fetch(`/api/analyze/${qrCode}`);
                 const data = await response.json();
                 
                 if (data.error) {
-                    panel.innerHTML = `<div style="color: red;">❌ ${data.message}</div>`;
+                    panel.innerHTML = `<div style="color: red;">${data.message}</div>`;
                 } else {
                     displayCartAnalysis(data, panel);
                 }
@@ -200,40 +177,35 @@
                 panel.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
             }
             
-            button.textContent = '🔍 Hide Analysis';
+            button.textContent = 'Hide Analysis';
         }
         
         function displayCartAnalysis(data, panel) {
             let html = `
-🏷️ ITEM ANALYSIS: ${data.item.item_name}
+ITEM ANALYSIS: ${data.item.item_name}
 ${'='.repeat(50)}
 
-📋 ITEM DETAILS:
+ITEM DETAILS:
 QR Code: ${data.item.qr_code}
 Name: ${data.item.item_name}
 Brand: ${data.item.brand || 'N/A'}
 Category: ${data.item.category || 'N/A'}
 Weight: ${data.item.weight_grams}g
 
-🧵 MATERIAL COMPOSITION:`;
+MATERIAL COMPOSITION:`;
 
             data.materials.forEach(material => {
                 html += `\n• ${material.material_name.charAt(0).toUpperCase() + material.material_name.slice(1)}: ${material.percentage}%`;
             });
 
-            html += `\n\n🌍 ENVIRONMENTAL IMPACT ANALYSIS:\n${'-'.repeat(50)}`;
+            html += `\n\nENVIRONMENTAL IMPACT ANALYSIS:\n${'-'.repeat(50)}`;
 
             const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
-            const categoryEmojis = {
-                'water_usage': '💧',
-                'carbon_footprint': '🏭', 
-                'energy_usage': '⚡'
-            };
-
+            
             categoryOrder.forEach(category => {
                 if (data.impacts[category]) {
                     const impact = data.impacts[category];
-                    html += `\n\n${categoryEmojis[category]} ${impact.name.split(' ').slice(1).join(' ')}:`;
+                    html += `\n\n${impact.name.split(' ').slice(1).join(' ')}:`;
                     
                     impact.materials.forEach(mat => {
                         html += `\n  ${mat.material}: ${mat.impact.toFixed(2)} ${impact.unit} for this ${data.item.weight_grams}g item`;
@@ -245,7 +217,7 @@ Weight: ${data.item.weight_grams}g
             });
 
             html += `\n\n${'='.repeat(50)}`;
-            html += `\n📊 TOTAL IMPACT FOR THIS ${data.item.weight_grams}g ITEM:`;
+            html += `\nTOTAL IMPACT FOR THIS ${data.item.weight_grams}g ITEM:`;
             
             categoryOrder.forEach(category => {
                 if (data.impacts[category]) {
@@ -257,7 +229,7 @@ Weight: ${data.item.weight_grams}g
 
             // Add water consumption visualization
             if (data.tube_scale !== undefined) {
-                html += `\n\n💧 WATER CONSUMPTION VISUALIZATION:`;
+                html += `\n\nWATER CONSUMPTION VISUALIZATION:`;
                 html += `\n<div class="tube-visualization">`;
                 html += `\n<div class="tube">`;
                 html += `\n<div class="tube-fill" style="height: ${Math.min((data.tube_scale / 400) * 100, 100)}%;"></div>`;
@@ -282,6 +254,57 @@ Weight: ${data.item.weight_grams}g
             }
         }
 
+        document.getElementById('pay-btn').addEventListener('click', async function() {
+            const cartItems = {{ cart_items|tojson }};
+            const sustainabilityScore = {{ sustainability_score if sustainability_score is not none else 'null' }};
+            
+            if (!cartItems.length) {
+                alert('Your cart is empty!');
+                return;
+            }
+
+            // Analyze all items in the cart to get their detailed impact
+            let total = {water: 0, carbon: 0, energy: 0};
+            let itemImpacts = [];
+            for (const item of cartItems) {
+                try {
+                    let res = await fetch(`/api/analyze/${item.qr_code}`);
+                    if (!res.ok) continue;
+                    let data = await res.json();
+                    
+                    const water_impact = data.impacts.water_usage;
+                    const carbon_impact = data.impacts.carbon_footprint;
+                    const energy_impact = data.impacts.energy_usage;
+
+                    let w = water_impact ? water_impact.value.toFixed(2) : '-';
+                    let c = carbon_impact ? carbon_impact.value.toFixed(2) : '-';
+                    let e = energy_impact ? energy_impact.value.toFixed(2) : '-';
+
+                    if (water_impact) total.water += water_impact.value;
+                    if (carbon_impact) total.carbon += carbon_impact.value;
+                    if (energy_impact) total.energy += energy_impact.value;
+                    
+                    itemImpacts.push({name: data.item.item_name, water: w, carbon: c, energy: e});
+                } catch (error) {
+                    console.error("Error analyzing item for receipt:", item.qr_code, error);
+                }
+            }
+
+            // 1. Save the detailed current choice to the session for the receipt page
+            await fetch('/save_current_choice_for_receipt', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    items: itemImpacts,
+                    total: total,
+                    score: sustainabilityScore
+                })
+            });
+
+            // 2. Redirect to the new receipt page
+            window.location.href = '/receipt';
+        });
+
         async function getSustainabilityScore() {
             // Get the score from the page (already rendered by Flask)
             return {{ sustainability_score if sustainability_score is not none else 'null' }};
@@ -295,132 +318,6 @@ Weight: ${data.item.weight_grams}g
             } catch {}
             return null;
         }
-
-        document.getElementById('pay-btn').addEventListener('click', async function() {
-            const cartItems = {{ cart_items|tojson }};
-            const sustainabilityScore = {{ sustainability_score if sustainability_score is not none else 'null' }};
-            if (!cartItems.length) {
-                alert('Your cart is empty!');
-                return;
-            }
-            // Fetch previous choice for comparison BEFORE saving the new one
-            let prevChoice = null;
-            try {
-                const res = await fetch('/get_last_choice');
-                if (res.ok) prevChoice = await res.json();
-            } catch {}
-            const now = new Date();
-            const dateStr = now.toLocaleString();
-            let receiptHtml = `<div style='max-width:700px;margin:0 auto;font-family:Segoe UI,Arial,sans-serif;'>`;
-            receiptHtml += `<div style='text-align:center;margin-bottom:18px;'>`;
-            receiptHtml += `<div style='font-size:2em;font-weight:700;color:#388e3c;'>{{ username }}'s Fashion Choices</div>`;
-            receiptHtml += `<div style='font-size:1em;color:#888;'>${dateStr}</div>`;
-            receiptHtml += `</div>`;
-            // Section 1: Previous Choice
-            if (prevChoice && prevChoice.items && prevChoice.items.length) {
-                receiptHtml += `<h2 style='text-align:center;margin-bottom:10px;color:#1976d2;'>Previous Choice</h2>`;
-                receiptHtml += `<table style='width:100%;border-collapse:collapse;margin-bottom:10px;'>`;
-                receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Item</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Water</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Carbon</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Energy</th></tr></thead><tbody>`;
-                for (const item of prevChoice.items) {
-                    receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>${item.name}</strong></td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.water}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.carbon}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${item.energy}</td></tr>`;
-                }
-                receiptHtml += `</tbody></table>`;
-                receiptHtml += `<div style='background:#e8f5e9;padding:12px 10px;border-radius:8px;text-align:center;margin-bottom:18px;'>`;
-                receiptHtml += `<div style='font-size:1.1em;font-weight:600;color:#388e3c;margin-bottom:4px;'>Total Environmental Impact</div>`;
-                receiptHtml += `<div style='font-size:1.05em;'><strong>Water:</strong> ${prevChoice.total.water.toFixed(2)} L</div>`;
-                receiptHtml += `<div style='font-size:1.05em;'><strong>Carbon:</strong> ${prevChoice.total.carbon.toFixed(2)} kg_CO2</div>`;
-                receiptHtml += `<div style='font-size:1.05em;'><strong>Energy:</strong> ${prevChoice.total.energy.toFixed(2)} MJ</div>`;
-                receiptHtml += `<div style='font-size:1.1em;margin-top:8px;'><strong>Sustainability Score:</strong> <span style='color:#388e3c;'>${prevChoice.score !== null ? prevChoice.score + '%' : 'N/A'}</span></div>`;
-                receiptHtml += `</div>`;
-            }
-            // Section 2: Current Choice
-            receiptHtml += `<h2 style='text-align:center;margin-bottom:10px;color:#388e3c;'>Current Choice</h2>`;
-            receiptHtml += `<table style='width:100%;border-collapse:collapse;margin-bottom:10px;'>`;
-            receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Item</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Water</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Carbon</th><th style='text-align:right;padding:8px 4px;border-bottom:1px solid #ddd;'>Energy</th></tr></thead><tbody>`;
-            let total = {water: 0, carbon: 0, energy: 0};
-            let itemImpacts = [];
-            for (const item of cartItems) {
-                let res = await fetch(`/api/analyze/${item.qr_code}`);
-                let data = await res.json();
-                let w = data.impacts.water_usage ? `${data.impacts.water_usage.value.toFixed(2)} ${data.impacts.water_usage.unit}` : '-';
-                let c = data.impacts.carbon_footprint ? `${data.impacts.carbon_footprint.value.toFixed(2)} ${data.impacts.carbon_footprint.unit}` : '-';
-                let e = data.impacts.energy_usage ? `${data.impacts.energy_usage.value.toFixed(2)} ${data.impacts.energy_usage.unit}` : '-';
-                if (data.impacts.water_usage) total.water += data.impacts.water_usage.value;
-                if (data.impacts.carbon_footprint) total.carbon += data.impacts.carbon_footprint.value;
-                if (data.impacts.energy_usage) total.energy += data.impacts.energy_usage.value;
-                itemImpacts.push({name: data.item.item_name, water: w, carbon: c, energy: e});
-                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>${data.item.item_name}</strong></td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${w}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${c}</td><td style='text-align:right;padding:6px 4px;border-bottom:1px solid #eee;'>${e}</td></tr>`;
-            }
-            receiptHtml += `</tbody></table>`;
-            receiptHtml += `<div style='background:#e8f5e9;padding:12px 10px;border-radius:8px;text-align:center;margin-bottom:18px;'>`;
-            receiptHtml += `<div style='font-size:1.1em;font-weight:600;color:#388e3c;margin-bottom:4px;'>Total Environmental Impact</div>`;
-            receiptHtml += `<div style='font-size:1.05em;'><strong>Water:</strong> ${total.water.toFixed(2)} L</div>`;
-            receiptHtml += `<div style='font-size:1.05em;'><strong>Carbon:</strong> ${total.carbon.toFixed(2)} kg_CO2</div>`;
-            receiptHtml += `<div style='font-size:1.05em;'><strong>Energy:</strong> ${total.energy.toFixed(2)} MJ</div>`;
-            receiptHtml += `<div style='font-size:1.1em;margin-top:8px;'><strong>Sustainability Score:</strong> <span style='color:#388e3c;'>${sustainabilityScore !== null ? sustainabilityScore + '%' : 'N/A'}</span></div>`;
-            receiptHtml += `</div>`;
-            // Section 3: Comparison
-            if (prevChoice && prevChoice.items && prevChoice.items.length) {
-                receiptHtml += `<hr><h3 style='text-align:center;margin-top:24px;'>Comparison</h3>`;
-                receiptHtml += `<div style='background:#e3f2fd;padding:14px 10px;border-radius:8px;text-align:center;margin-top:12px;'>`;
-                receiptHtml += `<table style='width:100%;border-collapse:collapse;margin:0 auto 10px auto;'>`;
-                receiptHtml += `<thead><tr style='background:#f8f9fa;'><th style='text-align:left;padding:8px 4px;border-bottom:1px solid #ddd;'>Metric</th><th style='text-align:center;padding:8px 4px;border-bottom:1px solid #ddd;'>Previous Choice</th><th style='text-align:center;padding:8px 4px;border-bottom:1px solid #ddd;'>Current Choice</th></tr></thead><tbody>`;
-                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Water (L)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.water.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.water.toFixed(2)}</td></tr>`;
-                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Carbon (kg_CO₂)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.carbon.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.carbon.toFixed(2)}</td></tr>`;
-                receiptHtml += `<tr><td style='padding:6px 4px;border-bottom:1px solid #eee;'><strong>Energy (MJ)</strong></td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${prevChoice.total.energy.toFixed(2)}</td><td style='text-align:center;padding:6px 4px;border-bottom:1px solid #eee;'>${total.energy.toFixed(2)}</td></tr>`;
-                receiptHtml += `<tr><td style='padding:6px 4px;'><strong>Sustainability Score</strong></td><td style='text-align:center; color:#1976d2; font-weight:600;'>${prevChoice.score !== null ? prevChoice.score + '%' : 'N/A'}</td><td style='text-align:center; color:#388e3c; font-weight:600;'>${sustainabilityScore !== null ? sustainabilityScore + '%' : 'N/A'}</td></tr>`;
-                receiptHtml += `</tbody></table>`;
-                receiptHtml += `</div>`;
-            }
-            receiptHtml += `</div>`;
-            receiptHtml += `</div>`;
-            const printWindow = window.open('', '', 'width=700,height=900');
-            const printStyles = `
-              <style>
-                body { background: #f5f5f5; margin: 0; padding: 0; }
-                .receipt-container {
-                  max-width: 420px;
-                  margin: 24px auto;
-                  background: #fff;
-                  border-radius: 12px;
-                  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-                  padding: 24px 18px 32px 18px;
-                  font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                h2, h3 { margin-top: 0; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-                th, td { padding: 8px 4px; }
-                th { background: #f8f9fa; border-bottom: 1px solid #ddd; }
-                td { border-bottom: 1px solid #eee; }
-                .total-section, .compare-section {
-                  border-radius: 8px;
-                  margin-top: 18px;
-                  padding: 14px 10px;
-                  text-align: center;
-                }
-                .total-section { background: #e8f5e9; }
-                .compare-section { background: #e3f2fd; }
-                @media print {
-                  body { background: #fff; }
-                  .receipt-container { box-shadow: none; margin: 0; }
-                }
-              </style>
-            `;
-            printWindow.document.write(`<html><head><title>Receipt</title>${printStyles}</head><body><div class='receipt-container'>${receiptHtml}</div></body></html>`);
-            printWindow.document.close();
-            printWindow.focus();
-            printWindow.print();
-            // After printing, save the current choice as the new last_choice
-            await fetch('/save_choice', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    items: itemImpacts,
-                    total: {water: total.water, carbon: total.carbon, energy: total.energy},
-                    score: sustainabilityScore
-                })
-            });
-        });
     </script>
 </body>
 </html> 

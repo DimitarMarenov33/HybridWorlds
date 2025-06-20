@@ -1,7 +1,8 @@
 # app.py - Add this file to your existing project
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 import sqlite3
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Needed for session
@@ -346,15 +347,84 @@ def save_choice():
     session.modified = True
     return jsonify({'success': True})
 
-@app.route('/clear_cart', methods=['POST'])
-def clear_cart():
-    session['cart_items'] = []
-    session.modified = True
-    return jsonify({'success': True})
-
 @app.route('/get_last_choice')
 def get_last_choice():
     return jsonify(session.get('last_choice', {}))
+
+@app.route('/save_current_choice_for_receipt', methods=['POST'])
+def save_current_choice_for_receipt():
+    """Save the current cart details to the session before showing the receipt."""
+    data = request.get_json()
+    session['current_choice_for_receipt'] = data
+    session.modified = True
+    return jsonify({'success': True})
+
+@app.route('/receipt')
+def receipt():
+    """Render the printable receipt page."""
+    username = session.get('username', 'Guest')
+    # These are the choices for the *current* receipt view
+    current_choice = session.get('current_choice_for_receipt', {})
+    prev_choice = session.get('last_choice', {})
+    if not current_choice:
+        # If there's no data, redirect to cart to prevent errors
+        return redirect(url_for('cart'))
+    response = make_response(render_template(
+        'receipt.html',
+        username=username,
+        date=datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+        current_choice=current_choice,
+        prev_choice=prev_choice
+    ))
+    # NOW, after we've prepared the receipt with the old 'last_choice',
+    # we update 'last_choice' to be the 'current_choice' for the *next* transaction.
+    session['last_choice'] = current_choice
+    session.modified = True
+    return response
+
+@app.route('/api/cart_summary')
+def api_cart_summary():
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Not logged in'}), 401
+    cart_items = session.get('cart_items', [])
+    minmax = {
+        'water_usage': (5.91996, 6000),
+        'carbon_footprint': (0.9, 10.4),
+        'energy_usage': (1.09323, 138)
+    }
+    def get_item_score(qr_code):
+        impacts = {}
+        item = db.get_clothing_item(qr_code)
+        if not item:
+            return None
+        materials = db.get_material_composition(qr_code)
+        for category in minmax:
+            total = 0
+            for mat in materials:
+                impact_data = db.get_environmental_impact(mat['material_name'], category)
+                if impact_data:
+                    total += impact_data['impact_value'] * (mat['percentage']/100) * (item['weight_grams']/1000)
+            impacts[category] = total
+        scores = [normalize(impacts[cat], minmax[cat][0], minmax[cat][1]) for cat in minmax]
+        return sum(scores) / len(scores) * 100
+    item_scores = []
+    if cart_items:
+        for item in cart_items:
+            score = get_item_score(item['qr_code'])
+            if score is not None:
+                item_scores.append({'name': item['name'], 'score': round(score, 1)})
+        scores = [s['score'] for s in item_scores]
+        if scores:
+            sustainability_score = round(sum(scores) / len(scores), 1)
+        else:
+            sustainability_score = None
+    else:
+        sustainability_score = None
+    return jsonify({
+        'sustainability_score': sustainability_score,
+        'item_scores': item_scores
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
