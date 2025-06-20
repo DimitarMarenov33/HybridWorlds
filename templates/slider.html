@@ -19,6 +19,7 @@
         <button class="btn btn-activate" id="activateBtn" onclick="connectBluetooth()">
             <i class="fas fa-satellite-dish"></i> Activate Connection
         </button>
+        <button class="btn btn-skip" id="skipBtn" onclick="skipConnection()"><i class="fas fa-forward"></i> Skip for Now</button>
         <br>
         <br>
         <p class="text-light small mt-3">Note: A browser pop-up will ask for Bluetooth permission.</p>
@@ -132,7 +133,11 @@ function updateSlider() {
     impactDescription.style.color = color;
 }
 
-document.addEventListener('DOMContentLoaded', updateSlider);
+document.addEventListener('DOMContentLoaded', async () => {
+    updateSlider();
+    // Attempt to reconnect to a previously permitted device on page load
+    await checkAndReconnect();
+});
 
 function setSliderValue(value) {
     const slider = document.getElementById('impactSlider');
@@ -161,18 +166,28 @@ function updateConnectionUI(connected) {
     }
 }
 
-async function connectBluetooth() {
-    try {
-        if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported in this browser.');
-        
-        console.log('Requesting Bluetooth device...');
-        bluetoothDevice = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'HM' }, { name: 'HM-10' }, { namePrefix: 'HC' }],
-            optionalServices: [0xFFE0]
-        });
+function setupManualSlider() {
+    // Manually hide the connection prompt and show the slider interface
+    document.getElementById('connectionPrompt').style.display = 'none';
+    document.getElementById('sliderInterface').style.display = 'block';
+    
+    // Enable the slider for manual control
+    const slider = document.getElementById('impactSlider');
+    slider.disabled = false;
+    slider.style.cursor = 'pointer';
+    slider.addEventListener('input', updateSlider); // Make sure the UI updates when dragged
 
+    // Update the status to 'Manual Control' and remove the disconnect button
+    const statusDiv = document.getElementById('connectionStatus');
+    if (statusDiv) {
+        statusDiv.innerHTML = '<span class="badge badge-success">Manual Control</span>';
+    }
+}
+
+async function connectToDevice(device, onFailureCallback) {
+    try {
         console.log('Connecting to GATT Server...');
-        const server = await bluetoothDevice.gatt.connect();
+        const server = await device.gatt.connect();
         
         console.log('Getting Service...');
         const service = await server.getPrimaryService(0xFFE0);
@@ -184,16 +199,68 @@ async function connectBluetooth() {
         await bluetoothCharacteristic.startNotifications();
         
         bluetoothCharacteristic.addEventListener('characteristicvaluechanged', handleBluetoothData);
-        bluetoothDevice.addEventListener('gattserverdisconnected', handleDisconnection);
+        device.addEventListener('gattserverdisconnected', handleDisconnection);
+        
+        bluetoothDevice = device;
         
         console.log('✅ Connection successful!');
         updateConnectionUI(true);
-        showNotification('Successfully connected to ' + bluetoothDevice.name, 'success');
+        showNotification('Successfully connected to ' + (bluetoothDevice.name || 'your device'), 'success');
         
     } catch (error) {
-        console.error('⚠️ Bluetooth connection error:', error);
-        showNotification(`Connection failed: ${error.message}`, 'error');
-        updateConnectionUI(false);
+        console.error('⚠️ Connection attempt failed:', error);
+        if (onFailureCallback) {
+            onFailureCallback(error);
+        } else {
+            // Default failure behavior if no callback is provided
+            updateConnectionUI(false);
+            if (error.name !== 'NotFoundError') {
+                showNotification(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+    }
+}
+
+async function checkAndReconnect() {
+    if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== 'function') {
+        console.log('Web Bluetooth or getDevices() not supported.');
+        return;
+    }
+
+    try {
+        console.log('Checking for previously permitted devices...');
+        const devices = await navigator.bluetooth.getDevices();
+        const hmDevice = devices.find(d => d.name && (d.name.includes('HM') || d.name.includes('HC')));
+
+        if (hmDevice) {
+            console.log('Found permitted device:', hmDevice.name);
+            showNotification('Found previous device. Attempting to reconnect...', 'info');
+            // On page load, failure should be silent and just leave the prompt open.
+            await connectToDevice(hmDevice);
+        } else {
+            console.log('No previously permitted devices found.');
+        }
+    } catch (error) {
+        console.error('Error during automatic reconnection check:', error);
+    }
+}
+
+async function connectBluetooth() {
+    try {
+        if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported in this browser.');
+        
+        console.log('Requesting Bluetooth device...');
+        const device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'HM' }, { name: 'HM-10' }, { namePrefix: 'HC' }],
+            optionalServices: [0xFFE0]
+        });
+
+        await connectToDevice(device);
+        
+    } catch (error) {
+       // Errors from requestDevice (like user cancelling) are caught here.
+       // Errors from connectToDevice are handled inside that function now.
+       console.error('⚠️ Bluetooth discovery error:', error.message);
     }
 }
 
@@ -216,6 +283,35 @@ function handleDisconnection() {
     console.log('Bluetooth device disconnected.');
     showNotification('Bluetooth device has been disconnected.', 'warning');
     updateConnectionUI(false);
+}
+
+async function skipConnection() {
+    if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== 'function') {
+        console.log('Web Bluetooth not supported. Starting in manual mode.');
+        setupManualSlider();
+        return;
+    }
+
+    try {
+        console.log('Skip clicked. Checking for previously permitted devices...');
+        const devices = await navigator.bluetooth.getDevices();
+        const hmDevice = devices.find(d => d.name && (d.name.includes('HM') || d.name.includes('HC')));
+
+        if (hmDevice) {
+            console.log('Found permitted device, attempting to connect:', hmDevice.name);
+            showNotification('Attempting to connect to your device...', 'info');
+            // If connection fails, call setupManualSlider
+            await connectToDevice(hmDevice, setupManualSlider);
+        } else {
+            console.log('No permitted devices found. Setting up manual slider.');
+            showNotification('No previous device found. Starting in manual mode.', 'warning');
+            setupManualSlider();
+        }
+    } catch (error) {
+        console.error('Error during skip/auto-connect process:', error);
+        showNotification('An error occurred. Starting in manual mode.', 'error');
+        setupManualSlider();
+    }
 }
 
 async function disconnectBluetooth() {
