@@ -1,5 +1,5 @@
 # app.py - Add this file to your existing project
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response, flash
 import sqlite3
 import os
 from datetime import datetime
@@ -80,14 +80,14 @@ def set_username():
         cursor.execute('''INSERT OR IGNORE INTO users (username) VALUES (?)''', (username,))
         conn.commit()
         conn.close()
-        return redirect(url_for('index'))
+        return redirect(url_for('slider'))
     return redirect(url_for('username_page'))
 
 @app.route('/index')
 def index():
     username = session.get('username')
     if not username:
-        return redirect(url_for('username_page'))
+        return redirect(url_for('slider'))
     """Main page with QR scanner"""
     return render_template('index.html', username=username)
 
@@ -353,7 +353,12 @@ def get_last_choice():
 
 @app.route('/save_current_choice_for_receipt', methods=['POST'])
 def save_current_choice_for_receipt():
-    """Save the current cart details to the session before showing the receipt."""
+    """Save the current cart details and shift the previous one."""
+    # If a 'current' choice exists in the session, move it to become the 'previous' choice.
+    if 'current_choice_for_receipt' in session:
+        session['prev_choice_for_receipt'] = session['current_choice_for_receipt']
+    
+    # Save the new data, which was just sent from the cart, as the new 'current' choice.
     data = request.get_json()
     session['current_choice_for_receipt'] = data
     session.modified = True
@@ -361,26 +366,98 @@ def save_current_choice_for_receipt():
 
 @app.route('/receipt')
 def receipt():
-    """Render the printable receipt page."""
-    username = session.get('username', 'Guest')
-    # These are the choices for the *current* receipt view
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('username_page'))
+        
     current_choice = session.get('current_choice_for_receipt', {})
-    prev_choice = session.get('last_choice', {})
-    if not current_choice:
-        # If there's no data, redirect to cart to prevent errors
-        return redirect(url_for('cart'))
-    response = make_response(render_template(
-        'receipt.html',
-        username=username,
-        date=datetime.now().strftime("%B %d, %Y at %I:%M %p"),
-        current_choice=current_choice,
-        prev_choice=prev_choice
-    ))
-    # NOW, after we've prepared the receipt with the old 'last_choice',
-    # we update 'last_choice' to be the 'current_choice' for the *next* transaction.
-    session['last_choice'] = current_choice
-    session.modified = True
-    return response
+    prev_choice = session.get('prev_choice_for_receipt', {})
+    
+    # Get the current date and time to display on the receipt
+    date_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
+        
+    return render_template(
+        'receipt.html', 
+        current_choice=current_choice, 
+        prev_choice=prev_choice,
+        username=username, 
+        date=date_str,
+        hide_nav=True
+    )
+
+@app.route('/slider')
+def slider():
+    username = session.get('username')
+    if not username:
+        # If no user, send them to login first
+        return redirect(url_for('username_page'))
+    # hide_nav is used in base.html to conditionally hide the navigation bar
+    return render_template('slider.html', username=username, hide_nav=True)
+
+@app.route('/care', methods=['GET', 'POST'])
+def care():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('username_page'))
+
+    if request.method == 'POST':
+        wear_frequency = request.form.get('wear_frequency')
+        wash_frequency = request.form.get('wash_frequency')
+        
+        # Save to database
+        try:
+            conn = sqlite3.connect('fashion_env.db')
+            cursor = conn.cursor()
+            
+            # Create table if it doesn't exist
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS user_care_habits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    wear_frequency INTEGER,
+                    wash_frequency TEXT,
+                    initial_score INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Get the initial score from session
+            initial_score = session.get('initial_score', 0)
+            
+            # Insert or update the user's care habits
+            cursor.execute('''
+                INSERT OR REPLACE INTO user_care_habits 
+                (username, wear_frequency, wash_frequency, initial_score) 
+                VALUES (?, ?, ?, ?)
+            ''', (username, wear_frequency, wash_frequency, initial_score))
+            
+            conn.commit()
+            conn.close()
+            
+            flash('Your care habits have been saved successfully!', 'success')
+            return redirect(url_for('index'))
+            
+        except Exception as e:
+            print(f"Error saving care habits: {e}")
+            flash('Error saving your habits. Please try again.', 'error')
+            return redirect(url_for('care'))
+
+    return render_template('care.html', hide_nav=True, username=username)
+
+@app.route('/save_score', methods=['POST'])
+def save_score():
+    data = request.get_json()
+    score = data.get('score')
+    username = session.get('username')
+
+    if score is None or username is None:
+        return jsonify({'status': 'error', 'message': 'Missing score or user information.'}), 400
+
+    session['initial_score'] = score
+    
+    print(f"Received score from {username}: {score}%. Stored in session.")
+
+    return jsonify({'status': 'success', 'message': f'Initial score of {score} saved for user {username}.'})
 
 @app.route('/api/cart_summary')
 def api_cart_summary():

@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Clothing Care Habits{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/care.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1><i class="fa-solid fa-leaf-heart" style="color: #28a745;"></i> Your Clothing Care Habits</h1>
+    <h2>Tell us a bit more to personalize your sustainability score.</h2>
+    <hr>
+    <br>
+
+    <form id="careForm" method="POST" action="{{ url_for('care') }}">
+        <div class="form-group">
+            <label for="wear_frequency" class="form-label">
+                <i class="fa-solid fa-repeat"></i>
+                On average, how many times do you wear a piece of clothing before washing it?
+            </label>
+            <input type="number" class="form-control" id="wear_frequency" name="wear_frequency" min="1" placeholder="e.g., 3" required>
+        </div>
+        <br>
+        <div class="form-group">
+            <label for="wash_frequency" class="form-label">
+                <i class="fa-solid fa-washing-machine"></i>
+                How often do you typically do a load of laundry?
+            </label>
+            <select class="form-control" id="wash_frequency" name="wash_frequency" required>
+                <option value="" disabled selected>Select an option</option>
+                <option value="daily">Every day</option>
+                <option value="biweekly">A few times a week</option>
+                <option value="weekly">Once a week</option>
+                <option value="fortnightly">Once every two weeks</option>
+                <option value="monthly">Once a month or less</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-submit">
+            <i class="fa-solid fa-save"></i> Save Habits
+        </button>
+    </form>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+<script>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          toastr.{{ category }}("{{ message }}");
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+</script>
+{% endblock %} 

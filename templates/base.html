@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fashion Environmental Impact Analyzer</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block head %}{% endblock %}
 </head>
 <body>
     <div class="container">
@@ -27,7 +28,11 @@
         {% if not hide_nav %}
         <nav class="nav">
             <ul class="nav-links">
-                <li><a href="/" class="nav-link">Item Scanner</a></li>
+                <li><a href="/index" class="nav-link">Item Scanner</a></li>
+                {% if request.path != '/index' %}
+                <li><a href="/cart" class="nav-link">Cart</a></li>
+                <li><a href="/slider" class="nav-link">Impact Slider</a></li>
+                {% endif %}
                 <li><a href="/database" class="nav-link">Database</a></li>
             </ul>
         </nav>

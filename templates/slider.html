@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Arduino Slider Control{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/slider.css') }}">
+{% endblock %}
+
+{% block content %}
+
+<!-- Connection Prompt -->
+<div id="connectionPrompt" class="connection-prompt-container">
+    <div class="connection-prompt">
+        <h2 class="text-white mb-4">Physical Slider Control</h2>
+        <br>
+        <p class="text-light mb-4">Click below to activate the connection to your Arduino slider.</p>
+        <br>
+        <button class="btn btn-activate" id="activateBtn" onclick="connectBluetooth()">
+            <i class="fas fa-satellite-dish"></i> Activate Connection
+        </button>
+        <br>
+        <br>
+        <p class="text-light small mt-3">Note: A browser pop-up will ask for Bluetooth permission.</p>
+    </div>
+</div>
+
+<!-- Main Slider Interface (hidden initially) -->
+<div id="sliderInterface" class="container mt-4" style="display: none;">
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div style="flex-grow: 1; text-align: center;">
+                            <h2 class="mb-2">What do you think your personal sustainability score is when it comes to fashion?</h2>
+                            <br>
+                            <p class="mb-0" style="color: #ddd; font-style: italic; font-size: 0.9em;">On a scale from 0% (I only buy clothes that are harmful to the environment) to 100% (I shop sustainably and know how to maintain my clothing), where do you see yourself?</p>
+                        </div>
+                        <br>
+                        <div id="connectionStatus" class="d-flex align-items-center pl-3">
+                            <span class="badge badge-success">Connected</span>
+                            <button class="btn btn-sm btn-outline-danger ml-2" onclick="disconnectBluetooth()">
+                                <i class="fas fa-times"></i> Disconnect
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Slider Container -->
+                    <div class="slider-container">
+                        <div class="slider-wrapper">
+                            <input type="range" id="impactSlider" class="slider" min="0" max="100" value="0" disabled>
+                            <div class="slider-labels">
+                                <span class="label-low">High Impact</span>
+                                <span class="label-high">Low Impact</span>
+                            </div>
+                        </div>
+
+                        <!-- Current Value Display -->
+                        <div class="value-display">
+                            <h4>Current Impact Level: <span id="sliderValue">0</span>%</h4>
+                            <div class="impact-indicator">
+                                <div class="impact-bar">
+                                    <div class="impact-fill" id="impactFill"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Impact Description -->
+                        <div class="impact-description mt-3">
+                            <div id="impactDescription" class="description-text">
+                                Waiting for data...
+                            </div>
+                        </div>
+
+                        <!-- Save Score Button -->
+                         <br>
+                        <div class="text-center mt-4">
+                            <button class="btn btn-save-score" onclick="saveScore()">
+                                <i class="fas fa-save"></i> Save Score
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let bluetoothDevice = null;
+let bluetoothCharacteristic = null;
+
+// Global function to update slider display
+function updateSlider() {
+    const slider = document.getElementById('impactSlider');
+    if (!slider) return;
+    
+    const sliderValue = document.getElementById('sliderValue');
+    const impactFill = document.getElementById('impactFill');
+    const impactDescription = document.getElementById('impactDescription');
+    const value = parseInt(slider.value);
+
+    sliderValue.textContent = value;
+    impactFill.style.width = value + '%';
+
+    let description = '';
+    let color = '';
+
+    if (value < 25) {
+        description = 'Warning! Very high environmental impact.';
+        color = '#F44336'; // Red
+    } else if (value < 50) {
+        description = 'Caution! High environmental impact.';
+        color = '#FF9800'; // Orange
+    } else if (value < 75) {
+        description = 'Good. Moderate environmental impact.';
+        color = '#FFC107'; // Yellow/Amber
+    } else {
+        description = 'Excellent! Very low environmental impact.';
+        color = '#4CAF50'; // Green
+    }
+    
+    // Override for the initial state
+    if (value === 0) {
+        description = 'No impact detected. Waiting for data...';
+        color = '#cccccc'; // A light grey for the initial state
+    }
+
+    impactDescription.textContent = description;
+    impactDescription.style.color = color;
+}
+
+document.addEventListener('DOMContentLoaded', updateSlider);
+
+function setSliderValue(value) {
+    const slider = document.getElementById('impactSlider');
+    if (slider) {
+        slider.value = value;
+        updateSlider();
+    }
+}
+
+function updateConnectionUI(connected) {
+    const prompt = document.getElementById('connectionPrompt');
+    const interface = document.getElementById('sliderInterface');
+    
+    if (connected) {
+        prompt.style.display = 'none';
+        interface.style.display = 'block';
+        const statusBadge = document.querySelector('#connectionStatus .badge');
+        if (statusBadge) {
+            statusBadge.textContent = 'Connected to ' + (bluetoothDevice.name || 'HM-10');
+        }
+    } else {
+        prompt.style.display = 'flex';
+        interface.style.display = 'none';
+        bluetoothDevice = null;
+        bluetoothCharacteristic = null;
+    }
+}
+
+async function connectBluetooth() {
+    try {
+        if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported in this browser.');
+        
+        console.log('Requesting Bluetooth device...');
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'HM' }, { name: 'HM-10' }, { namePrefix: 'HC' }],
+            optionalServices: [0xFFE0]
+        });
+
+        console.log('Connecting to GATT Server...');
+        const server = await bluetoothDevice.gatt.connect();
+        
+        console.log('Getting Service...');
+        const service = await server.getPrimaryService(0xFFE0);
+        
+        console.log('Getting Characteristic...');
+        bluetoothCharacteristic = await service.getCharacteristic(0xFFE1);
+
+        console.log('Starting Notifications...');
+        await bluetoothCharacteristic.startNotifications();
+        
+        bluetoothCharacteristic.addEventListener('characteristicvaluechanged', handleBluetoothData);
+        bluetoothDevice.addEventListener('gattserverdisconnected', handleDisconnection);
+        
+        console.log('✅ Connection successful!');
+        updateConnectionUI(true);
+        showNotification('Successfully connected to ' + bluetoothDevice.name, 'success');
+        
+    } catch (error) {
+        console.error('⚠️ Bluetooth connection error:', error);
+        showNotification(`Connection failed: ${error.message}`, 'error');
+        updateConnectionUI(false);
+    }
+}
+
+function handleBluetoothData(event) {
+    try {
+        const value = new TextDecoder().decode(event.target.value).trim();
+        const match = value.match(/=>\s*(\d+)%/);
+        if (match) {
+            const percentage = parseInt(match[1]);
+            if (!isNaN(percentage) && percentage >= 0 && percentage <= 100) {
+                setSliderValue(percentage);
+            }
+        }
+    } catch (error) {
+        console.error('Error processing Bluetooth data:', error);
+    }
+}
+
+function handleDisconnection() {
+    console.log('Bluetooth device disconnected.');
+    showNotification('Bluetooth device has been disconnected.', 'warning');
+    updateConnectionUI(false);
+}
+
+async function disconnectBluetooth() {
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        await bluetoothDevice.gatt.disconnect();
+    } else {
+        handleDisconnection();
+    }
+}
+
+function saveScore() {
+    const slider = document.getElementById('impactSlider');
+    const score = slider.value;
+
+    fetch('/save_score', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ score: score }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            showNotification('Score saved! Taking you to the next step...', 'success');
+            setTimeout(() => {
+                window.location.href = "{{ url_for('care') }}";
+            }, 1500); // Wait 1.5 seconds for user to read notification
+        } else {
+            showNotification(data.message || 'Could not save your score.', 'error');
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        showNotification('An error occurred while saving the score.', 'error');
+    });
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
+}
+</script>
+{% endblock %} 
