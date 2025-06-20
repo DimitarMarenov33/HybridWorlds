@@ -623,8 +623,75 @@
                 <input type="text" id="item-category">
             </div>
             <div class="form-group">
-                <label for="item-weight">Weight (grams) *</label>
-                <input type="number" id="item-weight" required min="1">
+                <label for="item-type">Clothing Type *</label>
+                <select id="item-type" required>
+                    <option value="">Select clothing type...</option>
+                    <optgroup label="👕 Women's Clothing">
+                        <option value="40">Bra (40g)</option>
+                        <option value="120">T-shirt (120g)</option>
+                        <option value="500">Jeans (500g)</option>
+                        <option value="23">Underwear/Strings (23g)</option>
+                        <option value="175">Shirt (175g)</option>
+                        <option value="175">Shorts (175g)</option>
+                        <option value="105">Swimsuit (105g)</option>
+                        <option value="310">Evening dress (310g)</option>
+                        <option value="1400">Wedding dress (1400g)</option>
+                        <option value="235">Dress (235g)</option>
+                        <option value="250">Skirt (250g)</option>
+                        <option value="78">Vest (78g)</option>
+                        <option value="350">Trousers (350g)</option>
+                        <option value="115">Hat/Scarf (115g)</option>
+                        <option value="500">Training suit (500g)</option>
+                        <option value="500">Wind breaker (500g)</option>
+                        <option value="150">Pajamas (150g)</option>
+                        <option value="275">Dressing gown (275g)</option>
+                        <option value="65">Mittens (65g)</option>
+                        <option value="175">Waistcoat (175g)</option>
+                        <option value="700">Autumn coat (700g)</option>
+                        <option value="3500">Fur coat (3500g)</option>
+                        <option value="275">Sweater (275g)</option>
+                        <option value="900">Winter jacket (900g)</option>
+                        <option value="750">Coat (750g)</option>
+                        <option value="280">Leggings (280g)</option>
+                        <option value="875">Business suit (875g)</option>
+                    </optgroup>
+                    <optgroup label="👔 Men's Clothing">
+                        <option value="150">Vest (150g)</option>
+                        <option value="225">T-shirt (225g)</option>
+                        <option value="725">Jeans (725g)</option>
+                        <option value="85">Underwear/Pants (85g)</option>
+                        <option value="150">Shirt (150g)</option>
+                        <option value="275">Shorts (275g)</option>
+                        <option value="13">Socks/Stockings (13g)</option>
+                        <option value="1500">Business suit (1500g)</option>
+                        <option value="1600">Winter jacket (1600g)</option>
+                        <option value="375">Pajamas (375g)</option>
+                        <option value="650">Trousers (650g)</option>
+                        <option value="160">Hat/Scarf (160g)</option>
+                        <option value="1150">Training suit (1150g)</option>
+                        <option value="1000">Wind breaker (1000g)</option>
+                        <option value="110">Gloves (110g)</option>
+                        <option value="550">Sweater (550g)</option>
+                        <option value="1300">Autumn coat (1300g)</option>
+                        <option value="1225">Coat (1225g)</option>
+                    </optgroup>
+                    <optgroup label="🧒 Children's Clothing">
+                        <option value="60">Child T-shirt (60g)</option>
+                        <option value="250">Child Jeans (250g)</option>
+                        <option value="100">Child Dress (100g)</option>
+                        <option value="150">Child Sweater (150g)</option>
+                        <option value="300">Child Winter jacket (300g)</option>
+                        <option value="200">Child Trousers (200g)</option>
+                    </optgroup>
+                    <optgroup label="👟 Accessories & Footwear">
+                        <option value="200">Sneakers (200g)</option>
+                        <option value="400">Boots (400g)</option>
+                        <option value="150">Sandals (150g)</option>
+                        <option value="50">Belt (50g)</option>
+                        <option value="30">Tie (30g)</option>
+                        <option value="20">Hair accessories (20g)</option>
+                    </optgroup>
+                </select>
             </div>
             
             <div class="material-composition">
@@ -1104,7 +1171,7 @@
             name: document.getElementById('item-name').value,
             brand: document.getElementById('item-brand').value || null,
             category: document.getElementById('item-category').value || null,
-            weight: parseInt(document.getElementById('item-weight').value),
+            weight: parseInt(document.getElementById('item-type').value) || 0,
             materials: []
         };
         
