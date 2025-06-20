@@ -53,15 +53,18 @@ except ImportError:
             return cursor.fetchall()
         
         def add_clothing_item(self, qr_code, name, weight_grams, brand=None, category=None):
-            cursor = self.conn.cursor()
+            conn = self.get_connection()  # ← Use get_connection()
+            cursor = conn.cursor()
             try:
                 cursor.execute('''
                 INSERT INTO clothing_items (qr_code, item_name, brand, category, weight_grams)
                 VALUES (?, ?, ?, ?, ?)
                 ''', (qr_code, name, brand, category, weight_grams))
-                self.conn.commit()
+                conn.commit()
+                conn.close()  # ← Close the connection
                 return True
             except sqlite3.IntegrityError:
+                conn.close()  # ← Close on error too
                 return False
         
         def add_material(self, name, density=None, description=None):
@@ -94,6 +97,328 @@ except ImportError:
             
             self.conn.commit()
             return True
+        
+
+        def list_all_materials_with_impact_count(self):
+            """Get all materials with their impact data count"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT m.*, 
+                COUNT(ei.impact_id) as impact_count
+            FROM materials m
+            LEFT JOIN environmental_impacts ei ON m.material_id = ei.material_id
+            GROUP BY m.material_id, m.material_name, m.density_g_per_cm3, m.description
+            ORDER BY m.material_name
+            ''')
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        
+        def list_all_environmental_impacts(self):
+            """Get all environmental impacts with material names"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+            SELECT ei.impact_id, m.material_name, ei.impact_category, 
+                ei.impact_value, ei.unit, ei.source
+            FROM environmental_impacts ei
+            JOIN materials m ON ei.material_id = m.material_id
+            ORDER BY m.material_name, ei.impact_category
+            ''')
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        
+        def add_environmental_impact(self, material_name, impact_category, impact_value, unit, source=None):
+            """Add environmental impact data for a material"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Get material ID
+            cursor.execute('SELECT material_id FROM materials WHERE material_name = ?', (material_name.lower(),))
+            material = cursor.fetchone()
+            
+            if not material:
+                conn.close()
+                return False
+            
+            try:
+                cursor.execute('''
+                INSERT INTO environmental_impacts (material_id, impact_category, impact_value, unit, source)
+                VALUES (?, ?, ?, ?, ?)
+                ''', (material['material_id'], impact_category, impact_value, unit, source))
+                
+                impact_id = cursor.lastrowid
+                conn.commit()
+                conn.close()
+                return impact_id
+            except sqlite3.IntegrityError:
+                conn.close()
+                return False
+        
+        def update_environmental_impact(self, impact_id, material_name, impact_category, impact_value, unit, source=None):
+            """Update existing environmental impact data"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            # Get material ID
+            cursor.execute('SELECT material_id FROM materials WHERE material_name = ?', (material_name.lower(),))
+            material = cursor.fetchone()
+            
+            if not material:
+                conn.close()
+                return False
+            
+            try:
+                cursor.execute('''
+                UPDATE environmental_impacts 
+                SET material_id=?, impact_category=?, impact_value=?, unit=?, source=?
+                WHERE impact_id=?
+                ''', (material['material_id'], impact_category, impact_value, unit, source, impact_id))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def delete_environmental_impact(self, impact_id):
+            """Delete environmental impact data"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute("DELETE FROM environmental_impacts WHERE impact_id = ?", (impact_id,))
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def update_material(self, material_id, name, density=None, description=None):
+            """Update existing material"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute('''
+                UPDATE materials 
+                SET material_name=?, density_g_per_cm3=?, description=?
+                WHERE material_id=?
+                ''', (name.lower(), density, description, material_id))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def delete_material(self, material_id):
+            """Delete material and associated data"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                # Delete environmental impacts first
+                cursor.execute("DELETE FROM environmental_impacts WHERE material_id = ?", (material_id,))
+                
+                # Delete material compositions
+                cursor.execute("DELETE FROM clothing_material_composition WHERE material_id = ?", (material_id,))
+                
+                # Delete material
+                cursor.execute("DELETE FROM materials WHERE material_id = ?", (material_id,))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def update_clothing_item(self, qr_code, name, weight_grams, brand=None, category=None):
+            """Update existing clothing item"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute('''
+                UPDATE clothing_items 
+                SET item_name=?, brand=?, category=?, weight_grams=?
+                WHERE qr_code=?
+                ''', (name, brand, category, weight_grams, qr_code))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def delete_clothing_item(self, qr_code):
+            """Delete clothing item and its material composition"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                # Delete material composition first (foreign key constraint)
+                cursor.execute("DELETE FROM clothing_material_composition WHERE qr_code = ?", (qr_code,))
+                
+                # Delete clothing item
+                cursor.execute("DELETE FROM clothing_items WHERE qr_code = ?", (qr_code,))
+                
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def clear_material_composition(self, qr_code):
+            """Clear all material composition for an item"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                cursor.execute('DELETE FROM clothing_material_composition WHERE qr_code=?', (qr_code,))
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.Error:
+                conn.close()
+                return False
+        
+        def get_database_stats(self):
+            """Get overview statistics for the database"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            stats = {}
+            
+            # Get counts
+            cursor.execute('SELECT COUNT(*) as count FROM clothing_items')
+            stats['items_count'] = cursor.fetchone()['count']
+            
+            cursor.execute('SELECT COUNT(*) as count FROM materials')
+            stats['materials_count'] = cursor.fetchone()['count']
+            
+            cursor.execute('SELECT COUNT(*) as count FROM environmental_impacts')
+            stats['impacts_count'] = cursor.fetchone()['count']
+            
+            # Get unique brands
+            cursor.execute('SELECT COUNT(DISTINCT brand) as count FROM clothing_items WHERE brand IS NOT NULL')
+            stats['brands_count'] = cursor.fetchone()['count']
+            
+            # Get unique categories
+            cursor.execute('SELECT COUNT(DISTINCT category) as count FROM clothing_items WHERE category IS NOT NULL')
+            stats['categories_count'] = cursor.fetchone()['count']
+            
+            # Get unique impact categories
+            cursor.execute('SELECT COUNT(DISTINCT impact_category) as count FROM environmental_impacts')
+            stats['impact_categories_count'] = cursor.fetchone()['count']
+            
+            # Get average weight
+            cursor.execute('SELECT AVG(weight_grams) as avg_weight FROM clothing_items')
+            avg_weight = cursor.fetchone()['avg_weight']
+            stats['avg_weight'] = round(avg_weight, 1) if avg_weight else 0
+            
+            conn.close()
+            return stats
+        
+        def search_items(self, search_term):
+            """Search clothing items by name, brand, category, or QR code"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            search_pattern = f"%{search_term.lower()}%"
+            cursor.execute('''
+            SELECT * FROM clothing_items 
+            WHERE LOWER(qr_code) LIKE ? 
+            OR LOWER(item_name) LIKE ? 
+            OR LOWER(brand) LIKE ? 
+            OR LOWER(category) LIKE ?
+            ORDER BY item_name
+            ''', (search_pattern, search_pattern, search_pattern, search_pattern))
+            
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        
+        def search_materials(self, search_term):
+            """Search materials by name or description"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            search_pattern = f"%{search_term.lower()}%"
+            cursor.execute('''
+            SELECT m.*, COUNT(ei.impact_id) as impact_count
+            FROM materials m
+            LEFT JOIN environmental_impacts ei ON m.material_id = ei.material_id
+            WHERE LOWER(m.material_name) LIKE ? 
+            OR LOWER(m.description) LIKE ?
+            GROUP BY m.material_id
+            ORDER BY m.material_name
+            ''', (search_pattern, search_pattern))
+            
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        
+        def get_material_usage_count(self, material_id):
+            """Get how many clothing items use this material"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            SELECT COUNT(*) as count FROM clothing_material_composition 
+            WHERE material_id = ?
+            ''', (material_id,))
+            
+            result = cursor.fetchone()['count']
+            conn.close()
+            return result
+        
+        def backup_database(self, backup_path):
+            """Create a backup of the database"""
+            import shutil
+            try:
+                shutil.copy2(self.db_path, backup_path)
+                return True
+            except Exception:
+                return False
+        
+        def validate_material_composition(self, qr_code):
+            """Validate that material composition adds up to 100%"""
+            materials = self.get_material_composition(qr_code)
+            total_percentage = sum(material['percentage'] for material in materials)
+            return abs(total_percentage - 100) < 0.1  # Allow small rounding errors
+        
+        def get_items_by_material(self, material_name):
+            """Get all clothing items that contain a specific material"""
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            SELECT ci.*, cmc.percentage
+            FROM clothing_items ci
+            JOIN clothing_material_composition cmc ON ci.qr_code = cmc.qr_code
+            JOIN materials m ON cmc.material_id = m.material_id
+            WHERE m.material_name = ?
+            ORDER BY ci.item_name
+            ''', (material_name.lower(),))
+            
+            result = cursor.fetchall()
+            conn.close()
+            return result
+        
+        def close(self):
+            """Close database connection (if needed for certain operations)"""
+            # This method is mainly for compatibility with existing code
+            # Since we use get_connection() pattern, individual connections are closed in methods
+            pass
         
         def close(self):
             self.conn.close()
