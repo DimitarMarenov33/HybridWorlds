@@ -669,8 +669,7 @@ def add_to_cart():
             if any(cart_item['qr_code'] == qr_code for cart_item in session['cart_items']):
                 return jsonify({'success': False, 'message': 'Item already in cart'})
             
-            # Fetch item details from database using your existing logic
-            # You'll need to implement get_item_details_by_qr function
+            # Get item details directly from database
             item_details = get_item_details_by_qr(qr_code)
             
             if not item_details:
@@ -680,21 +679,25 @@ def add_to_cart():
             cart_item = {
                 'name': item_details['item_name'],
                 'qr_code': qr_code,
-                'impact': f"{item_details['weight_grams']}g",  # You can enhance this with full environmental data
-                'price': '0.00',  # Placeholder
+                'impact': f"{item_details['weight_grams']}g",
+                'price': '0.00',
                 'quantity': 1,
                 'brand': item_details.get('brand', ''),
                 'category': item_details.get('category', ''),
-                'options': []  # Add any options if needed
+                'options': []
             }
             
             session['cart_items'].append(cart_item)
             session.modified = True
             
+            # Check if this was the first item added
+            is_first_item = len(session['cart_items']) == 1
+            
             return jsonify({
                 'success': True, 
                 'message': 'Item added to cart',
-                'item_name': item_details['item_name']
+                'item_name': item_details['item_name'],
+                'redirect_to_cart': is_first_item  # Redirect if first item
             })
             
         except Exception as e:
@@ -718,9 +721,9 @@ def add_to_cart():
             'name': item_name,
             'qr_code': qr_code,
             'impact': environmental_impact,
-            'price': '0.00',  # Placeholder
+            'price': '0.00',
             'quantity': 1,
-            'options': []  # Add any options if needed
+            'options': []
         }
         
         session['cart_items'].append(cart_item)
@@ -731,31 +734,22 @@ def add_to_cart():
 
 def get_item_details_by_qr(qr_code):
     """
-    Helper function to get item details by QR code from your database
-    Replace this with your actual database query logic
+    Helper function to get item details by QR code using your existing database setup
     """
     try:
-        # Using your existing database connection logic
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Use your existing database instance
+        item = db.get_clothing_item(qr_code)
         
-        # Query to get item details
-        cursor.execute("""
-            SELECT qr_code, item_name, brand, category, weight_grams, created_date
-            FROM clothing_items 
-            WHERE qr_code = %s
-        """, (qr_code,))
-        
-        row = cursor.fetchone()
-        
-        if row:
+        if item:
+            # Convert sqlite3.Row to dict to use .get() method
+            item_dict = dict(item)
             return {
-                'qr_code': row[0],
-                'item_name': row[1],
-                'brand': row[2],
-                'category': row[3],
-                'weight_grams': row[4],
-                'created_date': row[5]
+                'qr_code': item_dict['qr_code'],
+                'item_name': item_dict['item_name'],
+                'brand': item_dict.get('brand', ''),
+                'category': item_dict.get('category', ''),
+                'weight_grams': item_dict['weight_grams'],
+                'created_date': item_dict.get('created_date', '')
             }
         else:
             return None
@@ -763,10 +757,9 @@ def get_item_details_by_qr(qr_code):
     except Exception as e:
         print(f"Database error: {e}")
         return None
-    finally:
-        if 'conn' in locals():
-            conn.close()
-            
+
+
+
 @app.route('/api/suggestions/<query>')
 def get_suggestions(query):
     """Get QR code suggestions based on user input"""

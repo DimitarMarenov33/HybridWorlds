@@ -185,12 +185,14 @@
                         </div>
 
                         <!-- Bluetooth Scanner Section -->
-                        <div class="bluetooth-section">
+                        <div class="bluetooth-section" id="bluetooth-section">
                             <strong>🔵 Bluetooth Scanner</strong>
                             <small style="display: block; color: #666; margin-bottom: 8px;">For advanced Bluetooth LE scanners</small>
-                            <button type="button" class="scanner-btn scanner-btn-secondary" onclick="connectBluetoothScanner()" id="bluetooth-btn">
-                                Connect Bluetooth Scanner
-                            </button>
+                            <div id="bluetooth-status">
+                                <button type="button" class="scanner-btn scanner-btn-secondary" onclick="connectBluetoothScanner()" id="bluetooth-btn">
+                                    Connect Bluetooth Scanner
+                                </button>
+                            </div>
                             <div id="device-info" class="device-info" style="display: none;"></div>
                         </div>
                         
@@ -198,6 +200,14 @@
                         <div id="successMessage" class="mt-2" style="display: none;"></div>
                     </form>
                     <div class="alert alert-success text-center mt-3 mb-4">
+                        <strong>📱 Recommended Scanner Setup:</strong>
+                        <div style="font-size: 14px; margin-top: 8px;">
+                            Most QR scanners work best in <strong>"Keyboard Mode"</strong><br>
+                            1. Set scanner to "HID Keyboard" or "Keyboard Wedge" mode<br>
+                            2. Configure to send "Enter" after each scan<br>
+                            3. Click in input field above and scan - it will auto-add to cart!
+                        </div>
+                        <hr style="margin: 15px 0;">
                         <strong>Sample QR codes to try:</strong>
                         <ul class="mb-0 list-unstyled">
                             <li>SOCK001 - Cotton Socks</li>
@@ -227,7 +237,13 @@
 <div id="results" class="results">
 Welcome to Fashion Environmental Impact Analyzer!
 
-Enter a QR code above to analyze a clothing item's environmental impact.
+🔍 SCANNER READY! 
+• Click in the input field above
+• Scan your first QR code with your scanner
+• First item will be added and you'll go to cart page
+• Continue scanning more items in your cart
+
+You can also manually enter a QR code above to analyze a clothing item's environmental impact.
 
 The analysis will show:
 ✓ Item details (weight, materials)
@@ -236,7 +252,8 @@ The analysis will show:
 ✓ Total calculated impact for the item
 ✓ Visual water consumption scale
 
-🔍 Scanner Ready: Click in the input field above and scan your QR code!
+💡 TIP: Set your scanner to "Keyboard Mode" for best results!
+🛒 WORKFLOW: First scan → Go to cart → Continue scanning
 </div>
 
 <script>
@@ -253,6 +270,38 @@ class QRScannerManager {
         this.bluetoothCharacteristic = null;
         
         this.initializeScanner();
+        this.checkBluetoothSupport();
+    }
+
+    checkBluetoothSupport() {
+        const bluetoothSection = document.getElementById('bluetooth-section');
+        const bluetoothStatus = document.getElementById('bluetooth-status');
+        
+        if (!navigator.bluetooth) {
+            bluetoothStatus.innerHTML = `
+                <div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; font-size: 12px;">
+                    ⚠️ Web Bluetooth not available<br>
+                    <small>Use keyboard-mode scanner instead (recommended)</small>
+                </div>
+            `;
+        } else if (location.protocol !== 'https:') {
+            bluetoothStatus.innerHTML = `
+                <div style="background: #fff3cd; color: #856404; padding: 8px; border-radius: 4px; font-size: 12px;">
+                    ⚠️ Bluetooth requires HTTPS<br>
+                    <small>Use keyboard-mode scanner instead</small>
+                </div>
+            `;
+        } else {
+            // Bluetooth potentially available
+            bluetoothStatus.innerHTML = `
+                <button type="button" class="scanner-btn scanner-btn-secondary" onclick="connectBluetoothScanner()" id="bluetooth-btn">
+                    Connect Bluetooth Scanner
+                </button>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                    Note: Most scanners work better in keyboard mode
+                </div>
+            `;
+        }
     }
 
     initializeScanner() {
@@ -316,16 +365,6 @@ class QRScannerManager {
         try {
             // Use existing addItemToCart function
             await addItemToCart();
-            
-            // If successful, the existing function will show success message
-            this.setStatus('success', '✅', `Processed: ${qrCode}`);
-            
-            // Auto-clear and focus for next scan
-            setTimeout(() => {
-                this.qrInput.value = '';
-                this.qrInput.focus();
-                this.setStatus('ready', '✅', 'Ready for next scan');
-            }, 2000);
             
         } catch (error) {
             console.error('Scan processing error:', error);
@@ -665,25 +704,71 @@ async function addItemToCart() {
         
         if (data.error) {
             displayError(data.message, data.available_items);
-        } else {
-            // Add item to cart
-            const environmentalImpact = getEnvironmentalSummary(data.impacts);
-            const cartResponse = await addToCart(data.item.item_name, data.item.qr_code, environmentalImpact);
+            return;
+        }
+        
+        // Add item to cart using JSON request (for the new unified route)
+        const cartResponse = await fetch('/add_to_cart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ qr_code: qrCode })
+        });
+        
+        const cartData = await cartResponse.json();
+        
+        if (cartData.success) {
+            showMessage(`✅ ${cartData.item_name} successfully added to cart!`, 'success');
             
-            if (cartResponse.success) {
-                showMessage(`✅ ${data.item.item_name} successfully added to cart!`, 'success');
-                // Show scanner success toast too
-                if (scannerManager) {
-                    scannerManager.showSuccessToast(`🛒 ${data.item.item_name} added to cart!`);
-                }
-                // Clear the input
-                document.getElementById('qrInput').value = '';
-            } else {
-                showMessage(cartResponse.message, 'error');
+            // Show scanner success toast too
+            if (scannerManager) {
+                scannerManager.showSuccessToast(`🛒 ${cartData.item_name} added to cart!`);
+            }
+            
+            // Check if we should redirect to cart (first item)
+            if (cartData.redirect_to_cart) {
+                showMessage(`🎉 First item added! Redirecting to cart...`, 'success');
+                setTimeout(() => {
+                    window.location.href = '/cart';
+                }, 2000); // Give time to see the success message
+                return;
+            }
+            
+            // Clear the input for next scan (if staying on this page)
+            document.getElementById('qrInput').value = '';
+            
+            // Update scanner status for successful processing
+            if (scannerManager) {
+                scannerManager.setStatus('success', '✅', `Added: ${cartData.item_name}`);
+                setTimeout(() => {
+                    scannerManager.qrInput.focus();
+                    scannerManager.setStatus('ready', '✅', 'Ready for next scan');
+                }, 2000);
+            }
+            
+        } else {
+            showMessage(cartData.message, 'error');
+            if (scannerManager) {
+                scannerManager.setStatus('error', '❌', cartData.message);
+                setTimeout(() => {
+                    scannerManager.setStatus('ready', '✅', 'Ready to scan');
+                    scannerManager.qrInput.focus();
+                }, 3000);
             }
         }
     } catch (error) {
-        resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+        const errorMsg = `Error: ${error.message}`;
+        resultsDiv.innerHTML = `<div class="error">${errorMsg}</div>`;
+        showMessage(errorMsg, 'error');
+        
+        if (scannerManager) {
+            scannerManager.setStatus('error', '❌', 'Connection error');
+            setTimeout(() => {
+                scannerManager.setStatus('ready', '✅', 'Ready to scan');
+                scannerManager.qrInput.focus();
+            }, 3000);
+        }
     }
 }
 
@@ -703,23 +788,6 @@ function showMessage(message, type) {
 function hideMessage() {
     const successMessageDiv = document.getElementById('successMessage');
     successMessageDiv.style.display = 'none';
-}
-
-async function addToCart(itemName, qrCode, environmentalImpact) {
-    try {
-        const response = await fetch('/add_to_cart', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `item_name=${encodeURIComponent(itemName)}&qr_code=${encodeURIComponent(qrCode)}&environmental_impact=${encodeURIComponent(environmentalImpact)}`
-        });
-        
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        return { success: false, message: 'Error adding item to cart: ' + error.message };
-    }
 }
 
 async function fetchSuggestions(query) {

@@ -5,46 +5,275 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fashion Environmental Impact Analyzer - Cart</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cart.css') }}">
+    <style>
+        /* QR Scanner for Cart Page */
+        .cart-scanner {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 2px dashed #28a745;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .cart-scanner.active {
+            border-color: #20c997;
+            background: linear-gradient(135deg, #f0fff4 0%, #d4edda 100%);
+            animation: pulse-border 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { border-color: #28a745; }
+            50% { border-color: #20c997; }
+            100% { border-color: #28a745; }
+        }
+
+        .scanner-header {
+            font-size: 20px;
+            font-weight: 600;
+            color: #155724;
+            margin-bottom: 10px;
+        }
+
+        .scanner-subtitle {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .scanner-input-group {
+            display: flex;
+            gap: 10px;
+            max-width: 500px;
+            margin: 0 auto 20px;
+        }
+
+        .scanner-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            font-size: 16px;
+            background: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .scanner-input:focus {
+            outline: none;
+            border-color: #20c997;
+            box-shadow: 0 0 0 3px rgba(32, 201, 151, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .scanner-input.scanning {
+            background: #f0fff4;
+            border-color: #28a745;
+            animation: scanner-pulse 1.5s infinite;
+        }
+
+        @keyframes scanner-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        .scanner-btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .scanner-btn-primary {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .scanner-btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .scanner-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .scanner-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 15px;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-scanning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-success {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .item-added-animation {
+            animation: itemAdded 0.6s ease;
+        }
+
+        @keyframes itemAdded {
+            0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+            50% { transform: translateY(-10px) scale(1.05); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .success-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            font-weight: 500;
+            animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .cart-section {
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .scanner-input-group {
+                flex-direction: column;
+                max-width: 100%;
+            }
+            
+            .scanner-controls {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
+        <!-- QR Scanner Section -->
+        <div class="cart-scanner" id="cart-scanner">
+            <div class="scanner-header">📱 Scan More Items</div>
+            <div class="scanner-subtitle">Add items to your cart by scanning QR codes</div>
+            
+            <div id="scanner-status" class="scanner-status status-ready">
+                <span id="status-icon">✅</span>
+                <span id="status-text">Ready to scan - Click in the field below</span>
+            </div>
+            
+            <div class="scanner-input-group">
+                <input 
+                    type="text" 
+                    id="cart-qr-input" 
+                    class="scanner-input" 
+                    placeholder="Click here and scan QR code..."
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <button class="scanner-btn scanner-btn-primary" onclick="manualAddToCart()">
+                    ➕ Add Item
+                </button>
+            </div>
+            
+            <div class="scanner-controls">
+                <button class="scanner-btn" style="background: #6c757d; color: white;" onclick="focusScanner()">
+                    📱 Ready to Scan
+                </button>
+                <button class="scanner-btn" style="background: #6c757d; color: white;" onclick="clearScanner()">
+                    🗑️ Clear
+                </button>
+                <button class="scanner-btn" style="background: #6c757d; color: white;" onclick="testCartScan()">
+                    🧪 Test Scan
+                </button>
+            </div>
+        </div>
+
         <!-- Cart Section -->
         <div class="cart-section">
-            <h1 class="cart-title">Your Basket ({{ cart_items|length }})</h1>
-            {% if cart_items and cart_items|length > 0 %}
-                {% for item in cart_items %}
-                <div class="product-item mb-4" data-item-name="{{ item.name }}">
-                    <div class="product-details">
-                        <h3 class="product-name">{{ item.name }}</h3>
-                        <div>
-                            <span style="font-size: 15px; color: #666;">{{ item.impact }}</span>
+            <h1 class="cart-title">Your Basket (<span id="cart-count">{{ cart_items|length }}</span>)</h1>
+            <div id="cart-items-container">
+                {% if cart_items and cart_items|length > 0 %}
+                    {% for item in cart_items %}
+                    <div class="product-item mb-4" data-item-name="{{ item.name }}" data-qr-code="{{ item.qr_code }}">
+                        <div class="product-details">
+                            <h3 class="product-name">{{ item.name }}</h3>
+                            <div>
+                                <span style="font-size: 15px; color: #666;">{{ item.impact }}</span>
+                            </div>
+                            <br>
+                            <div class="product-options">
+                                {% for opt in item.options %}
+                                <span class="product-option">{{ opt }}</span>
+                                {% endfor %}
+                            </div>
+                            <div id="analysis-panel-{{ loop.index0 }}" class="analysis-panel">
+                                <!-- Analysis results will be displayed here -->
+                            </div>
                         </div>
-                        <br>
-                        <div class="product-options">
-                            {% for opt in item.options %}
-                            <span class="product-option">{{ opt }}</span>
-                            {% endfor %}
-                        </div>
-                        <div id="analysis-panel-{{ loop.index0 }}" class="analysis-panel">
-                            <!-- Analysis results will be displayed here -->
+                        <div class="product-actions">
+                            <button class="analyze-btn" onclick="analyzeItem('{{ item.qr_code }}', {{ loop.index0 }})" style="margin-right: 8px;">Analyze Item</button>
+                            <button class="action-btn" title="Remove" onclick="deleteItem('{{ item.name }}')">🗑️</button>
                         </div>
                     </div>
-                    <div class="product-actions">
-                        <button class="analyze-btn" onclick="analyzeItem('{{ item.qr_code }}', {{ loop.index0 }})" style="margin-right: 8px;">Analyze Item</button>
-                        <button class="action-btn" title="Remove" onclick="deleteItem('{{ item.name }}')">🗑️</button>
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="alert alert-info">No items in your basket yet.</div>
-            {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-info" id="empty-cart-message">No items in your basket yet. Scan an item above to get started!</div>
+                {% endif %}
+            </div>
         </div>
+        
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="summary-section">
                 <h2 class="summary-title">Summary</h2>
                 <div class="summary-row">
-                    <span>{{ cart_items|length }} products</span>
+                    <span><span id="sidebar-count">{{ cart_items|length }}</span> products</span>
                     <span>{{ summary.subtotal }} €</span>
                 </div>
                 <div class="summary-row">
@@ -53,7 +282,7 @@
                 </div>
                 <div class="summary-total">
                     <span>FINAL SUSTAINABILITY SCORE</span>
-                    <span style="font-size: 1.3em; font-weight: bold; color: #388e3c;">{{ sustainability_score if sustainability_score is not none else 'N/A' }}%</span>
+                    <span style="font-size: 1.3em; font-weight: bold; color: #388e3c;" id="sustainability-score">{{ sustainability_score if sustainability_score is not none else 'N/A' }}%</span>
                 </div>
                 {% if item_scores %}
                 <div style="margin-bottom: 15px;">
@@ -61,7 +290,7 @@
                         Show item scores <span id="score-chevron" class="score-chevron">▼</span>
                     </button>
                     <div id="score-details" style="display:none; background:#f8f9fa; border-radius:8px; margin-top:8px; padding:10px 15px;">
-                        <ul style="list-style:none; padding-left:0; margin:0;">
+                        <ul style="list-style:none; padding-left:0; margin:0;" id="score-list">
                             {% for item in item_scores %}
                             <li style="margin-bottom:6px;"><span style="font-weight:600;">{{ item.name }}</span>: <span style="color:#388e3c; font-weight:500;">{{ item.score }}%</span></li>
                             {% endfor %}
@@ -79,9 +308,192 @@
     </div>
 
     <script>
-        async function deleteItem(itemName) {
-            // Confirmation dialog removed
+        class CartQRScanner {
+            constructor() {
+                this.qrInput = document.getElementById('cart-qr-input');
+                this.statusEl = document.getElementById('scanner-status');
+                this.statusIcon = document.getElementById('status-icon');
+                this.statusText = document.getElementById('status-text');
+                this.scannerDiv = document.getElementById('cart-scanner');
+                
+                this.scanTimeout = null;
+                this.isProcessing = false;
+                
+                this.initializeScanner();
+            }
 
+            initializeScanner() {
+                // Auto-focus scanner input
+                this.qrInput.focus();
+
+                // Handle input changes for scanner detection
+                this.qrInput.addEventListener('input', (e) => {
+                    this.handleScanInput(e.target.value);
+                });
+
+                // Handle Enter key
+                this.qrInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && this.qrInput.value.trim() && !this.isProcessing) {
+                        e.preventDefault();
+                        this.processScan(this.qrInput.value.trim());
+                    }
+                });
+
+                // Visual feedback on focus/blur
+                this.qrInput.addEventListener('focus', () => {
+                    this.setStatus('ready', '✅', 'Ready to scan');
+                    this.qrInput.classList.add('scanning');
+                    this.scannerDiv.classList.add('active');
+                });
+
+                this.qrInput.addEventListener('blur', () => {
+                    this.qrInput.classList.remove('scanning');
+                    this.scannerDiv.classList.remove('active');
+                });
+            }
+
+            handleScanInput(value) {
+                if (!value) return;
+
+                if (this.scanTimeout) {
+                    clearTimeout(this.scanTimeout);
+                }
+
+                // Detect rapid input (likely from scanner)
+                const isRapidInput = value.length > 5;
+                
+                if (isRapidInput) {
+                    this.setStatus('scanning', '📡', 'Scanning detected...');
+                    
+                    this.scanTimeout = setTimeout(() => {
+                        if (value.trim()) {
+                            this.processScan(value.trim());
+                        }
+                    }, 300);
+                }
+            }
+
+            async processScan(qrCode) {
+                if (this.isProcessing) return;
+                
+                console.log('Processing QR code in cart:', qrCode);
+                this.isProcessing = true;
+                this.setStatus('scanning', '⏳', `Processing: ${qrCode}`);
+
+                try {
+                    const response = await fetch('/add_to_cart', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ qr_code: qrCode })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.setStatus('success', '✅', `Added: ${data.item_name}`);
+                        this.showSuccessToast(`🛒 ${data.item_name} added to cart!`);
+                        
+                        // Refresh cart display
+                        await this.refreshCartDisplay();
+                        
+                        // Clear input and prepare for next scan
+                        setTimeout(() => {
+                            this.qrInput.value = '';
+                            this.qrInput.focus();
+                            this.setStatus('ready', '✅', 'Ready for next scan');
+                        }, 2000);
+                    } else {
+                        this.setStatus('error', '❌', `Error: ${data.message}`);
+                        setTimeout(() => {
+                            this.setStatus('ready', '✅', 'Ready to scan');
+                            this.qrInput.focus();
+                        }, 3000);
+                    }
+                } catch (error) {
+                    console.error('Cart scan error:', error);
+                    this.setStatus('error', '❌', 'Connection error');
+                    setTimeout(() => {
+                        this.setStatus('ready', '✅', 'Ready to scan');
+                        this.qrInput.focus();
+                    }, 3000);
+                }
+
+                this.isProcessing = false;
+            }
+
+            async refreshCartDisplay() {
+                try {
+                    // Reload the page to get updated cart
+                    // In a more advanced implementation, you could fetch and update just the cart section
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                } catch (error) {
+                    console.error('Error refreshing cart:', error);
+                }
+            }
+
+            setStatus(type, icon, text) {
+                this.statusEl.className = `scanner-status status-${type}`;
+                this.statusIcon.textContent = icon;
+                this.statusText.textContent = text;
+            }
+
+            showSuccessToast(message) {
+                const toast = document.createElement('div');
+                toast.className = 'success-toast';
+                toast.textContent = message;
+                
+                document.body.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.style.animation = 'fadeOut 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+        }
+
+        // Initialize cart scanner
+        let cartScanner;
+        document.addEventListener('DOMContentLoaded', () => {
+            cartScanner = new CartQRScanner();
+        });
+
+        // Scanner control functions
+        function focusScanner() {
+            cartScanner.qrInput.focus();
+            cartScanner.setStatus('ready', '✅', 'Ready to scan');
+        }
+
+        function clearScanner() {
+            cartScanner.qrInput.value = '';
+            cartScanner.qrInput.focus();
+            cartScanner.setStatus('ready', '✅', 'Input cleared - Ready to scan');
+        }
+
+        function testCartScan() {
+            const testCodes = ['SHIRT001', 'SOCK001', 'JEANS001'];
+            const randomCode = testCodes[Math.floor(Math.random() * testCodes.length)];
+            cartScanner.qrInput.value = randomCode;
+            cartScanner.processScan(randomCode);
+        }
+
+        async function manualAddToCart() {
+            const qrCode = cartScanner.qrInput.value.trim();
+            if (qrCode) {
+                await cartScanner.processScan(qrCode);
+            } else {
+                cartScanner.setStatus('error', '❌', 'Please enter a QR code');
+                setTimeout(() => {
+                    cartScanner.setStatus('ready', '✅', 'Ready to scan');
+                }, 2000);
+            }
+        }
+
+        // Existing cart functions
+        async function deleteItem(itemName) {
             try {
                 const response = await fetch('/remove_from_cart', {
                     method: 'POST',
@@ -94,23 +506,17 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Find the specific item element by its name
                     const itemElement = document.querySelector(`[data-item-name="${itemName}"]`);
                     
                     if (itemElement) {
-                        // Animate the removal
                         itemElement.style.transition = 'all 0.3s ease';
                         itemElement.style.opacity = '0';
                         itemElement.style.transform = 'translateX(-100%)';
                         
                         setTimeout(() => {
-                            // Remove the element from DOM
-                            //itemElement.remove();
-                            // Instead, reload the page for full sync
                             window.location.reload();
                         }, 300);
                     } else {
-                        // Fallback: reload page if element not found
                         window.location.reload();
                     }
                 } else {
@@ -121,45 +527,16 @@
             }
         }
         
-        function showDeleteMessage(message) {
-            // Create a temporary success message
-            const messageDiv = document.createElement('div');
-            messageDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #28a745;
-                color: white;
-                padding: 15px 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 1000;
-                font-weight: 500;
-                transition: opacity 0.3s ease;
-            `;
-            messageDiv.textContent = message;
-            
-            document.body.appendChild(messageDiv);
-            
-            // Auto-remove after 3 seconds
-            setTimeout(() => {
-                messageDiv.style.opacity = '0';
-                setTimeout(() => messageDiv.remove(), 300);
-            }, 3000);
-        }
-        
         async function analyzeItem(qrCode, index) {
             const panel = document.getElementById(`analysis-panel-${index}`);
             const button = event.target;
             
-            // Toggle panel visibility
             if (panel.style.display === 'block') {
                 panel.style.display = 'none';
                 button.textContent = 'Analyze Item';
                 return;
             }
             
-            // Show loading
             panel.style.display = 'block';
             panel.innerHTML = 'Analyzing item... Please wait.';
             button.textContent = 'Analyzing...';
@@ -227,7 +604,6 @@ MATERIAL COMPOSITION:`;
                 }
             });
 
-            // Add water consumption visualization
             if (data.tube_scale !== undefined) {
                 html += `\n\nWATER CONSUMPTION VISUALIZATION:`;
                 html += `\n<div class="tube-visualization">`;
@@ -263,7 +639,6 @@ MATERIAL COMPOSITION:`;
                 return;
             }
 
-            // Analyze all items in the cart to get their detailed impact
             let total = {water: 0, carbon: 0, energy: 0};
             let itemImpacts = [];
             for (const item of cartItems) {
@@ -290,7 +665,6 @@ MATERIAL COMPOSITION:`;
                 }
             }
 
-            // 1. Save the detailed current choice to the session for the receipt page
             await fetch('/save_current_choice_for_receipt', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -301,23 +675,25 @@ MATERIAL COMPOSITION:`;
                 })
             });
 
-            // 2. Redirect to the new receipt page
             window.location.href = '/receipt';
         });
 
-        async function getSustainabilityScore() {
-            // Get the score from the page (already rendered by Flask)
-            return {{ sustainability_score if sustainability_score is not none else 'null' }};
-        }
+        // Auto-focus scanner when window regains focus
+        window.addEventListener('focus', () => {
+            if (cartScanner && cartScanner.qrInput) {
+                cartScanner.qrInput.focus();
+            }
+        });
 
-        async function getLastChoice() {
-            // Fetch from session via a hidden endpoint (Flask session is server-side)
-            try {
-                const res = await fetch('/static/last_choice.json'); // fallback if you want to persist
-                if (res.ok) return await res.json();
-            } catch {}
-            return null;
-        }
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
-</html> 
+</html>
