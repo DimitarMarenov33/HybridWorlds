@@ -1286,7 +1286,7 @@
             showMessage(`${selectedImpacts.size} impact(s) deleted successfully!`, 'success');
             selectedImpacts.clear();
             loadImpacts();
-        } catch (error) {
+    } catch (error) {
             // Error already shown by apiCall
         }
     }
@@ -1330,7 +1330,7 @@
                 }
             }, 300);
         }, 5000);
-    }
+}
 </script>
 
 {% endblock %}

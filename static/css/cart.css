@@ -17,8 +17,8 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 400px;
+    display: flex;
+    flex-direction: column;
     gap: 30px;
 }
 
@@ -38,6 +38,7 @@ body {
 
 .product-item {
     display: flex;
+    flex-direction: column;
     gap: 20px;
     align-items: flex-start;
 }
@@ -130,9 +131,8 @@ body {
 }
 
 .sidebar {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    width: 100%;
+    margin-top: 20px;
 }
 
 .countdown-banner {
@@ -187,6 +187,7 @@ body {
 
 .payment-buttons {
     display: flex;
+    flex-direction: column;
     gap: 10px;
     margin-bottom: 20px;
 }
@@ -264,18 +265,7 @@ body {
 }
 
 @media (max-width: 768px) {
-    .container {
-        grid-template-columns: 1fr;
-        gap: 20px;
-    }
-    
-    .product-item {
-        flex-direction: column;
-    }
-    
-    .payment-buttons {
-        flex-direction: column;
-    }
+    /* No stacking override needed, already stacked by default */
 }
 
 .analyze-btn {
@@ -301,6 +291,12 @@ body {
     font-family: 'Courier New', monospace;
     font-size: 14px;
     white-space: pre-wrap;
+    width: 100%;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    align-self: center;
 }
 .tube-visualization {
     margin: 20px 0;
