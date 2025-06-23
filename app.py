@@ -3,7 +3,6 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import sqlite3
 import os
 from datetime import datetime
-from flask import request, jsonify
 import traceback
 
 app = Flask(__name__)

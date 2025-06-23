@@ -50,9 +50,19 @@
     <div class="username-container">
         <div class="username-title">Welcome!</div>
         <form method="POST" action="/set_username">
-            <input type="text" name="username" class="username-input" placeholder="Enter your username" required>
+            <input type="text" name="username" class="username-input" id="username-input" placeholder="Enter your username" required>
             <button type="submit" class="username-btn">Continue</button>
         </form>
     </div>
+    <script>
+      window.onload = function() {
+        var input = document.getElementById('username-input');
+        if(input) {
+          input.focus();
+          // On some tablets, a small delay helps trigger the keyboard
+          setTimeout(function() { input.focus(); }, 200);
+        }
+      };
+    </script>
 </body>
 </html> 
