@@ -3,6 +3,7 @@ body {
     margin: 0; 
     padding: 0; 
     font-size: 14px; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 .receipt-container {
@@ -77,14 +78,24 @@ td {
 #print-btn {
     display: block;
     margin: 0 auto 18px auto;
-    padding: 8px 18px;
+    padding: 12px 24px;
     font-size: 1em;
     font-weight: 600;
     color: #fff;
     background: #388e3c;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 2px 8px rgba(56, 142, 60, 0.3);
+}
+
+#print-btn:hover {
+    background: #2e7d32;
+}
+
+#print-btn:active {
+    transform: translateY(1px);
 }
 
 .header-section {
@@ -171,6 +182,181 @@ td:not(:first-child) {
     text-align: left;
 }
 
+/* Mobile Responsive Design */
+@media (max-width: 768px) {
+    .receipt-container {
+        margin: 10px;
+        padding: 15px 12px 20px 12px;
+        border-radius: 8px;
+    }
+    
+    .main-title {
+        font-size: 1.4em;
+    }
+    
+    .date {
+        font-size: 0.85em;
+    }
+    
+    h2 {
+        font-size: 1.2em;
+        margin-bottom: 6px;
+    }
+    
+    h3 {
+        font-size: 1em;
+    }
+    
+    table {
+        margin-bottom: 10px;
+        font-size: 0.8em;
+    }
+    
+    th, td {
+        padding: 4px 2px;
+        font-size: 0.8em;
+    }
+    
+    .total-section, .compare-section {
+        padding: 8px;
+        margin-top: 10px;
+    }
+    
+    .impact-title {
+        font-size: 0.9em;
+    }
+    
+    .impact-item {
+        font-size: 0.85em;
+    }
+    
+    .score-display {
+        font-size: 0.9em;
+    }
+    
+    #print-btn {
+        padding: 14px 20px;
+        font-size: 0.95em;
+        border-radius: 6px;
+        margin-bottom: 15px;
+    }
+    
+    .no-items {
+        padding: 30px 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .receipt-container {
+        margin: 5px;
+        padding: 12px 10px 16px 10px;
+    }
+    
+    .main-title {
+        font-size: 1.2em;
+    }
+    
+    .date {
+        font-size: 0.8em;
+    }
+    
+    h2 {
+        font-size: 1.1em;
+        margin-bottom: 5px;
+    }
+    
+    h3 {
+        font-size: 0.95em;
+    }
+    
+    table {
+        margin-bottom: 8px;
+        font-size: 0.75em;
+    }
+    
+    th, td {
+        padding: 3px 1px;
+        font-size: 0.75em;
+    }
+    
+    .total-section, .compare-section {
+        padding: 6px;
+        margin-top: 8px;
+    }
+    
+    .impact-title {
+        font-size: 0.85em;
+    }
+    
+    .impact-item {
+        font-size: 0.8em;
+    }
+    
+    .score-display {
+        font-size: 0.85em;
+    }
+    
+    #print-btn {
+        padding: 12px 16px;
+        font-size: 0.9em;
+        margin-bottom: 12px;
+    }
+    
+    .no-items {
+        padding: 25px 15px;
+        font-size: 0.9em;
+    }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .receipt-container {
+        margin: 5px;
+        padding: 10px 8px 12px 8px;
+    }
+    
+    .main-title {
+        font-size: 1.1em;
+    }
+    
+    h2 {
+        font-size: 1em;
+        margin-bottom: 4px;
+    }
+    
+    table {
+        margin-bottom: 6px;
+    }
+    
+    th, td {
+        padding: 2px 1px;
+        font-size: 0.7em;
+    }
+    
+    .total-section, .compare-section {
+        padding: 5px;
+        margin-top: 6px;
+    }
+    
+    #print-btn {
+        padding: 10px 14px;
+        font-size: 0.85em;
+        margin-bottom: 10px;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+    #print-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    th, td {
+        min-height: 32px;
+    }
+}
+
 @media print {
     body, .receipt-container, .total-section, .compare-section, th, td {
         -webkit-print-color-adjust: exact !important;
@@ -199,24 +385,40 @@ td:not(:first-child) {
     .total-section, .compare-section {
         padding: 6px;
         margin-top: 8px;
-        border: 1px solid #eee;
-    }
-    
-    hr { 
-        display: none; 
     }
     
     table {
-        font-size: 6.5pt;
-        border-spacing: 0;
-        border-collapse: collapse;
+        margin-bottom: 8px;
     }
     
     th, td {
-        padding: 0 2px;
+        padding: 3px 2px;
+        font-size: 0.8em;
     }
     
-    #print-btn { 
-        display: none !important; 
+    .main-title {
+        font-size: 1.4em;
+    }
+    
+    .date {
+        font-size: 0.8em;
+    }
+    
+    #print-btn {
+        display: none;
+    }
+    
+    hr { 
+        border: none; 
+        border-top: 1px solid #ccc; 
+        margin: 8px 0; 
+    }
+    
+    table {
+        page-break-inside: avoid;
+    }
+    
+    th, td {
+        page-break-inside: avoid;
     }
 } 

@@ -265,7 +265,300 @@ body {
 }
 
 @media (max-width: 768px) {
-    /* No stacking override needed, already stacked by default */
+    .container {
+        padding: 10px;
+        gap: 20px;
+    }
+    
+    .cart-section {
+        padding: 20px 15px;
+        border-radius: 12px;
+    }
+    
+    .cart-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+    
+    .product-item {
+        gap: 15px;
+        padding: 15px 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .product-image {
+        width: 80px;
+        height: 80px;
+        border-radius: 8px;
+    }
+    
+    .product-name {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+    
+    .product-options {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .product-option {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    
+    .product-price {
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .quantity-controls {
+        gap: 12px;
+    }
+    
+    .quantity-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+        border-radius: 6px;
+        touch-action: manipulation;
+    }
+    
+    .quantity-input {
+        width: 60px;
+        font-size: 16px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .product-actions {
+        gap: 12px;
+        margin-top: 10px;
+    }
+    
+    .action-btn {
+        padding: 8px;
+        font-size: 16px;
+    }
+    
+    .summary-section {
+        padding: 20px 15px;
+        border-radius: 12px;
+    }
+    
+    .summary-title {
+        font-size: 18px;
+        margin-bottom: 15px;
+    }
+    
+    .summary-row {
+        font-size: 14px;
+        margin-bottom: 12px;
+    }
+    
+    .summary-total {
+        font-size: 20px;
+        margin: 15px 0;
+        padding-top: 15px;
+    }
+    
+    .payment-buttons {
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .gpay-btn, .process-btn {
+        padding: 16px 20px;
+        font-size: 16px;
+        border-radius: 12px;
+        touch-action: manipulation;
+    }
+    
+    .delivery-info {
+        padding: 12px;
+        font-size: 12px;
+        border-radius: 8px;
+    }
+    
+    .info-item {
+        font-size: 13px;
+        margin: 8px 0;
+    }
+    
+    .countdown-banner {
+        padding: 15px;
+        border-radius: 12px;
+    }
+    
+    .countdown-title {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+    
+    .countdown-timer {
+        font-size: 20px;
+    }
+    
+    .analysis-panel {
+        padding: 12px;
+        font-size: 12px;
+        border-radius: 8px;
+        margin-top: 8px;
+    }
+    
+    .tube {
+        width: 50px;
+        height: 150px;
+        border-width: 2px;
+        border-radius: 25px;
+    }
+    
+    .tube-label {
+        font-size: 16px;
+        margin-top: 10px;
+    }
+    
+    .score-toggle-btn {
+        padding: 12px 0;
+        font-size: 14px;
+        border-radius: 12px;
+        margin-top: 6px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 8px;
+        gap: 15px;
+    }
+    
+    .cart-section {
+        padding: 15px 12px;
+    }
+    
+    .cart-title {
+        font-size: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .product-item {
+        gap: 12px;
+        padding: 12px 0;
+    }
+    
+    .product-image {
+        width: 70px;
+        height: 70px;
+    }
+    
+    .product-name {
+        font-size: 15px;
+    }
+    
+    .product-price {
+        font-size: 15px;
+    }
+    
+    .quantity-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+    }
+    
+    .quantity-input {
+        width: 50px;
+        font-size: 14px;
+    }
+    
+    .summary-section {
+        padding: 15px 12px;
+    }
+    
+    .summary-title {
+        font-size: 16px;
+    }
+    
+    .summary-total {
+        font-size: 18px;
+    }
+    
+    .gpay-btn, .process-btn {
+        padding: 14px 16px;
+        font-size: 15px;
+    }
+    
+    .countdown-timer {
+        font-size: 18px;
+    }
+    
+    .tube {
+        width: 40px;
+        height: 120px;
+        border-radius: 20px;
+    }
+    
+    .tube-label {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .container {
+        padding: 8px;
+        gap: 12px;
+    }
+    
+    .cart-section {
+        padding: 12px 10px;
+    }
+    
+    .cart-title {
+        font-size: 18px;
+        margin-bottom: 12px;
+    }
+    
+    .product-item {
+        gap: 10px;
+        padding: 10px 0;
+    }
+    
+    .product-image {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .summary-section {
+        padding: 12px 10px;
+    }
+    
+    .summary-title {
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+    
+    .gpay-btn, .process-btn {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+    .quantity-btn, .action-btn, .gpay-btn, .process-btn, .score-toggle-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    .quantity-btn {
+        width: 44px;
+        height: 44px;
+    }
+    
+    .username-input, .quantity-input {
+        font-size: 16px; /* Prevents zoom on iOS */
+    }
 }
 
 .analyze-btn {
