@@ -1448,7 +1448,38 @@ def get_cart():
         'success': True,
         'items': cart_items
     })
+# Add this single endpoint to your app.py
 
+@app.route('/api/esp32', methods=['POST'])
+def receive_esp32_word():
+    """Receive a single word from ESP32"""
+    try:
+        # Get the word from POST data
+        if request.is_json:
+            data = request.get_json()
+            word = data.get('word', '').strip()
+        else:
+            word = request.form.get('word', '').strip()
+        
+        if not word:
+            return jsonify({'error': 'No word received'}), 400
+        
+        # Log the received word
+        print(f"ESP32 sent: {word}")
+        
+        # TODO: Add your logic here based on the word
+        # For now, just acknowledge receipt
+        
+        return jsonify({
+            'success': True, 
+            'received': word,
+            'message': f'Got word: {word}'
+        })
+        
+    except Exception as e:
+        print(f"ESP32 endpoint error: {e}")
+        return jsonify({'error': str(e)}), 500
+    
 # Error handling middleware
 @app.errorhandler(404)
 def not_found(error):
