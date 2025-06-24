@@ -1164,102 +1164,86 @@ The analysis will show:
 
 
 class ClothingItemDialog:
-    """Simplified dialog for adding clothing items"""
+    """Dialog for adding/editing clothing items with dynamic material composition"""
     def __init__(self, parent, title, db, current_item=None, current_materials=None):
         self.result = None
         self.db = db
-        
+        self.material_rows = []
+        self.material_row_vars = []
+
         print(f"Creating dialog: {title}")  # Debug
-        
+
         # Create dialog window
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
-        self.dialog.geometry("500x400")
+        self.dialog.geometry("500x500")
         self.dialog.transient(parent)
         self.dialog.grab_set()
-        
+
         # Center the dialog
         self.dialog.geometry("+%d+%d" % (parent.winfo_rootx() + 100, parent.winfo_rooty() + 100))
-        
+
         # Create main frame
         main_frame = ttk.Frame(self.dialog, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         # Basic item information
         basic_frame = ttk.LabelFrame(main_frame, text="Item Information", padding="10")
         basic_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
         # QR Code
         ttk.Label(basic_frame, text="QR Code:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.qr_entry = ttk.Entry(basic_frame, width=30)
         self.qr_entry.grid(row=0, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
-        
+
         # Name
         ttk.Label(basic_frame, text="Name:").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.name_entry = ttk.Entry(basic_frame, width=30)
         self.name_entry.grid(row=1, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
-        
+
         # Brand
         ttk.Label(basic_frame, text="Brand:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.brand_entry = ttk.Entry(basic_frame, width=30)
         self.brand_entry.grid(row=2, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
-        
+
         # Category
         ttk.Label(basic_frame, text="Category:").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.category_entry = ttk.Entry(basic_frame, width=30)
         self.category_entry.grid(row=3, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
-        
+
         # Weight
         ttk.Label(basic_frame, text="Weight (g):").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.weight_entry = ttk.Entry(basic_frame, width=30)
         self.weight_entry.grid(row=4, column=1, sticky=tk.EW, pady=5, padx=(10, 0))
-        
-        # Configure grid weights
+
         basic_frame.columnconfigure(1, weight=1)
-        
-        # Material composition section - simplified
-        materials_frame = ttk.LabelFrame(main_frame, text="Material Composition", padding="10")
-        materials_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        # Get first few common materials
-        available_materials = self.db.list_all_materials()
-        common_materials = ['cotton', 'polyester', 'wool', 'nylon', 'elastane']
-        
-        self.material_vars = {}
-        
-        ttk.Label(materials_frame, text="Enter percentages (must total 100%):").pack(anchor=tk.W, pady=(0, 5))
-        
-        # Create simplified material entries
-        for i, material in enumerate(available_materials[:6]):  # Limit to first 6 materials
-            material_name = material['material_name']
-            
-            frame = ttk.Frame(materials_frame)
-            frame.pack(fill=tk.X, pady=2)
-            
-            ttk.Label(frame, text=f"{material_name.title()}:", width=15).pack(side=tk.LEFT)
-            var = tk.StringVar(value="0")
-            entry = ttk.Entry(frame, textvariable=var, width=10)
-            entry.pack(side=tk.LEFT, padx=(5, 2))
-            ttk.Label(frame, text="%").pack(side=tk.LEFT)
-            
-            self.material_vars[material_name] = var
-        
-        # Total display
-        total_frame = ttk.Frame(materials_frame)
-        total_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        self.total_label = ttk.Label(total_frame, text="Total: 0%", foreground="red")
-        self.total_label.pack(side=tk.LEFT)
-        
-        ttk.Button(total_frame, text="Check Total", command=self.validate_percentages).pack(side=tk.RIGHT)
-        
+
+        # Material composition section (dynamic)
+        self.materials_frame = ttk.LabelFrame(main_frame, text="Material Composition", padding="10")
+        self.materials_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        ttk.Label(self.materials_frame, text="Enter percentages (must equal 100%):").pack(anchor=tk.W, pady=(0, 5))
+
+        self.material_rows_container = ttk.Frame(self.materials_frame)
+        self.material_rows_container.pack(fill=tk.BOTH, expand=True)
+
+        # Total display (create this BEFORE adding the first row)
+        self.total_label = ttk.Label(self.materials_frame, text="Total: 0%", foreground="red")
+        self.total_label.pack(anchor=tk.W, pady=(5, 0))
+
+        # Add the first material row by default
+        self.add_material_row()
+
+        # Add Material button
+        ttk.Button(self.materials_frame, text="Add Material", command=self.add_material_row).pack(anchor=tk.W, pady=(5, 0))
+
         # Buttons
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=(10, 0))
-        
+
         ttk.Button(btn_frame, text="Save", command=self.save).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Cancel", command=self.cancel).pack(side=tk.LEFT, padx=5)
-        
+
         # Populate with current data if editing
         if current_item:
             self.qr_entry.insert(0, current_item['qr_code'])
@@ -1268,91 +1252,108 @@ class ClothingItemDialog:
             self.brand_entry.insert(0, current_item['brand'] or '')
             self.category_entry.insert(0, current_item['category'] or '')
             self.weight_entry.insert(0, str(current_item['weight_grams']))
-            
             if current_materials:
-                for material in current_materials:
-                    material_name = material['material_name']
-                    if material_name in self.material_vars:
-                        self.material_vars[material_name].set(str(material['percentage']))
-        
+                for i, material in enumerate(current_materials):
+                    if i == 0:
+                        # Set first row
+                        self.material_row_vars[0][0].set(material['material_name'])
+                        self.material_row_vars[0][1].set(str(material['percentage']))
+                    else:
+                        self.add_material_row(material['material_name'], material['percentage'])
+
         # Focus on first entry
         if not current_item:
             self.qr_entry.focus()
         else:
             self.name_entry.focus()
-        
+
         print("Dialog created successfully")  # Debug
-    
-    def validate_percentages(self):
-        """Validate that material percentages total 100%"""
+
+    def add_material_row(self, material_name=None, percentage=None):
+        available_materials = self.db.list_all_materials()
+        row_frame = ttk.Frame(self.material_rows_container)
+        row_frame.pack(fill=tk.X, pady=2)
+
+        # Material dropdown
+        material_var = tk.StringVar(value=material_name if material_name else "")
+        material_dropdown = ttk.Combobox(row_frame, textvariable=material_var, state="readonly", width=18)
+        material_dropdown['values'] = [m['material_name'] for m in available_materials]
+        material_dropdown.pack(side=tk.LEFT, padx=(0, 5))
+
+        # Percentage entry
+        percent_var = tk.StringVar(value=str(percentage) if percentage is not None else "0")
+        percent_entry = ttk.Entry(row_frame, textvariable=percent_var, width=8)
+        percent_entry.pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(row_frame, text="%").pack(side=tk.LEFT)
+
+        # Remove button
+        remove_btn = ttk.Button(row_frame, text="×", width=2, command=lambda: self.remove_material_row(row_frame))
+        remove_btn.pack(side=tk.LEFT, padx=(5, 0))
+
+        # Track variables for later
+        self.material_row_vars.append((material_var, percent_var))
+        self.material_rows.append(row_frame)
+
+        # Update total when changed
+        percent_var.trace_add("write", lambda *args: self.update_total_percentage())
+        material_var.trace_add("write", lambda *args: self.update_total_percentage())
+
+        self.update_total_percentage()
+
+    def remove_material_row(self, row_frame):
+        idx = self.material_rows.index(row_frame)
+        self.material_rows.pop(idx)
+        self.material_row_vars.pop(idx)
+        row_frame.destroy()
+        self.update_total_percentage()
+
+    def update_total_percentage(self):
         total = 0
-        try:
-            for var in self.material_vars.values():
-                value = var.get().strip()
-                if value:
-                    total += float(value)
-        except ValueError:
-            self.total_label.config(text="Total: Invalid input", foreground="red")
-            return False
-        
-        self.total_label.config(text=f"Total: {total}%")
-        
-        if abs(total - 100) < 0.1:  # Allow small rounding errors
+        for material_var, percent_var in self.material_row_vars:
+            try:
+                val = float(percent_var.get())
+                total += val
+            except ValueError:
+                pass
+        self.total_label.config(text=f"Total: {total:.1f}%")
+        if abs(total - 100) < 0.1:
             self.total_label.config(foreground="green")
-            return True
         else:
             self.total_label.config(foreground="red")
-            return False
-    
+
     def save(self):
-        """Save the clothing item data"""
         print("Save button clicked")  # Debug
-        
         try:
-            # Validate basic fields
             qr_code = self.qr_entry.get().strip()
             name = self.name_entry.get().strip()
             weight_str = self.weight_entry.get().strip()
-            
             print(f"Basic validation: QR='{qr_code}', Name='{name}', Weight='{weight_str}'")  # Debug
-            
             if not qr_code or not name or not weight_str:
                 messagebox.showerror("Input Error", "QR Code, Name, and Weight are required")
                 return
-            
             try:
                 weight = int(weight_str)
             except ValueError:
                 messagebox.showerror("Input Error", "Weight must be a number")
                 return
-            
-            # Validate material percentages
+            # Collect materials from dynamic rows
             materials = []
             total_percentage = 0
-            
-            for material_name, var in self.material_vars.items():
+            for material_var, percent_var in self.material_row_vars:
+                material = material_var.get()
                 try:
-                    percentage_str = var.get().strip()
-                    if percentage_str:
-                        percentage = float(percentage_str)
-                        if percentage > 0:
-                            materials.append((material_name, percentage))
-                            total_percentage += percentage
+                    percentage = float(percent_var.get())
                 except ValueError:
-                    messagebox.showerror("Input Error", f"Invalid percentage for {material_name}")
-                    return
-            
-            print(f"Materials: {materials}, Total: {total_percentage}%")  # Debug
-            
-            # Allow saving with 0% materials for testing, just warn
+                    percentage = 0
+                if material and percentage > 0:
+                    materials.append((material, percentage))
+                    total_percentage += percentage
             if not materials:
                 if not messagebox.askyesno("No Materials", "No materials specified. Continue anyway?"):
                     return
             elif abs(total_percentage - 100) > 0.1:
-                if not messagebox.askyesno("Percentage Warning", 
-                    f"Material percentages total {total_percentage}% (not 100%). Continue anyway?"):
+                if not messagebox.askyesno("Percentage Warning", f"Material percentages total {total_percentage}% (not 100%). Continue anyway?"):
                     return
-            
             self.result = {
                 'qr_code': qr_code,
                 'name': name,
@@ -1361,16 +1362,13 @@ class ClothingItemDialog:
                 'weight': weight,
                 'materials': materials
             }
-            
             print(f"Result set: {self.result}")  # Debug
             self.dialog.destroy()
-            
         except Exception as e:
             print(f"Error in save: {e}")  # Debug
             messagebox.showerror("Error", f"An error occurred: {e}")
-    
+
     def cancel(self):
-        """Cancel the dialog"""
         print("Cancel button clicked")  # Debug
         self.dialog.destroy()
 
