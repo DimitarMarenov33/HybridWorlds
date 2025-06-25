@@ -426,7 +426,6 @@
             async refreshCartDisplay() {
                 try {
                     // Reload the page to get updated cart
-                    // In a more advanced implementation, you could fetch and update just the cart section
                     setTimeout(() => {
                         window.location.reload();
                     }, 1500);
@@ -454,14 +453,28 @@
                 }, 3000);
             }
         }
-
-        // Initialize cart scanner
+        
+        // Initialize cart scanner and load dual scores
         let cartScanner;
         document.addEventListener('DOMContentLoaded', () => {
             cartScanner = new CartQRScanner();
+            loadDualScores(); // Load the dual sustainability scores
         });
 
-        // Scanner control functions
+        // Helper function to get grade colors (same as before)
+        function getGradeColor(grade) {
+            const gradeMap = {
+                'A+': '#28a745', 'A': '#28a745', 'A-': '#28a745',  // Green
+                'B+': '#20c997', 'B': '#20c997', 'B-': '#20c997',  // Teal
+                'C+': '#ffc107', 'C': '#ffc107', 'C-': '#ffc107',  // Yellow
+                'D+': '#fd7e14', 'D': '#fd7e14',                   // Orange
+                'F': '#dc3545'                                     // Red
+            };
+            return gradeMap[grade] || '#6c757d';
+        }
+        
+
+        // Scanner control functions (unchanged)
         function focusScanner() {
             cartScanner.qrInput.focus();
             cartScanner.setStatus('ready', '✅', 'Ready to scan');
@@ -474,7 +487,7 @@
         }
 
         function testCartScan() {
-            const testCodes = ['SHIRT001', 'SOCK001', 'JEANS001'];
+            const testCodes = ['SHIRT001', 'SOCK001', 'JEANS001', 'TSHIRT001'];
             const randomCode = testCodes[Math.floor(Math.random() * testCodes.length)];
             cartScanner.qrInput.value = randomCode;
             cartScanner.processScan(randomCode);
@@ -492,7 +505,7 @@
             }
         }
 
-        // Existing cart functions
+        // Keep existing cart functions unchanged
         async function deleteItem(itemName) {
             try {
                 const response = await fetch('/remove_from_cart', {
@@ -526,97 +539,6 @@
                 alert('Error removing item: ' + error.message);
             }
         }
-        
-        async function analyzeItem(qrCode, index) {
-            const panel = document.getElementById(`analysis-panel-${index}`);
-            const button = event.target;
-            
-            if (panel.style.display === 'block') {
-                panel.style.display = 'none';
-                button.textContent = 'Analyze Item';
-                return;
-            }
-            
-            panel.style.display = 'block';
-            panel.innerHTML = 'Analyzing item... Please wait.';
-            button.textContent = 'Analyzing...';
-            
-            try {
-                const response = await fetch(`/api/analyze/${qrCode}`);
-                const data = await response.json();
-                
-                if (data.error) {
-                    panel.innerHTML = `<div style="color: red;">${data.message}</div>`;
-                } else {
-                    displayCartAnalysis(data, panel);
-                }
-            } catch (error) {
-                panel.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
-            }
-            
-            button.textContent = 'Hide Analysis';
-        }
-        
-        function displayCartAnalysis(data, panel) {
-            let html = `
-ITEM ANALYSIS: ${data.item.item_name}
-${'='.repeat(50)}
-
-ITEM DETAILS:
-QR Code: ${data.item.qr_code}
-Name: ${data.item.item_name}
-Brand: ${data.item.brand || 'N/A'}
-Category: ${data.item.category || 'N/A'}
-Weight: ${data.item.weight_grams}g
-
-MATERIAL COMPOSITION:`;
-
-            data.materials.forEach(material => {
-                html += `\n• ${material.material_name.charAt(0).toUpperCase() + material.material_name.slice(1)}: ${material.percentage}%`;
-            });
-
-            html += `\n\nENVIRONMENTAL IMPACT ANALYSIS:\n${'-'.repeat(50)}`;
-
-            const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
-            
-            categoryOrder.forEach(category => {
-                if (data.impacts[category]) {
-                    const impact = data.impacts[category];
-                    html += `\n\n${impact.name.split(' ').slice(1).join(' ')}:`;
-                    
-                    impact.materials.forEach(mat => {
-                        html += `\n  ${mat.material}: ${mat.impact.toFixed(2)} ${impact.unit} for this ${data.item.weight_grams}g item`;
-                        html += `\n    (calculation: ${mat.percentage}% × ${mat.base_impact} ${mat.unit.replace('/kg', '/kg')} × ${(data.item.weight_grams/1000).toFixed(3)}kg)`;
-                    });
-                    
-                    html += `\n  TOTAL: ${impact.value.toFixed(2)} ${impact.unit}`;
-                }
-            });
-
-            html += `\n\n${'='.repeat(50)}`;
-            html += `\nTOTAL IMPACT FOR THIS ${data.item.weight_grams}g ITEM:`;
-            
-            categoryOrder.forEach(category => {
-                if (data.impacts[category]) {
-                    const impact = data.impacts[category];
-                    const name = impact.name.split(' ').slice(1).join(' ');
-                    html += `\n${name}: ${impact.value.toFixed(2)} ${impact.unit}`;
-                }
-            });
-
-            if (data.tube_scale !== undefined) {
-                html += `\n\nWATER CONSUMPTION VISUALIZATION:`;
-                html += `\n<div class="tube-visualization">`;
-                html += `\n<div class="tube">`;
-                html += `\n<div class="tube-fill" style="height: ${Math.min((data.tube_scale / 400) * 100, 100)}%;"></div>`;
-                html += `\n</div>`;
-                html += `\n<div class="tube-label">${data.tube_scale}ml / 400ml</div>`;
-                html += `\n<p><small>Scale: 0.7L (best) = 0.06ml | 4,800L (worst) = 400ml (full tube)</small></p>`;
-                html += `\n</div>`;
-            }
-
-            panel.innerHTML = html;
-        }
 
         function toggleScoreDetails() {
             var details = document.getElementById('score-details');
@@ -630,15 +552,42 @@ MATERIAL COMPOSITION:`;
             }
         }
 
+        // Update payment button to use dual scoring data
         document.getElementById('pay-btn').addEventListener('click', async function() {
             const cartItems = {{ cart_items|tojson }};
-            const sustainabilityScore = {{ sustainability_score if sustainability_score is not none else 'null' }};
             
             if (!cartItems.length) {
                 alert('Your cart is empty!');
                 return;
             }
 
+            // Try to get dual scoring data for receipt
+            try {
+                const dualResponse = await fetch('/api/dual_cart_summary');
+                const dualData = await dualResponse.json();
+                
+                if (!dualData.error) {
+                    // Use dual scoring data for receipt
+                    await fetch('/save_current_choice_for_receipt', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            type: 'dual_scoring',
+                            initial_cost: dualData.cart_initial_cost,
+                            lasting_cost: dualData.cart_lasting_cost,
+                            items: dualData.item_scores,
+                            insights: dualData.cart_insights
+                        })
+                    });
+                    
+                    window.location.href = '/receipt';
+                    return;
+                }
+            } catch (error) {
+                console.error('Dual scoring failed for receipt, falling back to basic analysis');
+            }
+
+            // Fallback to basic analysis for receipt
             let total = {water: 0, carbon: 0, energy: 0};
             let itemImpacts = [];
             for (const item of cartItems) {
@@ -669,9 +618,9 @@ MATERIAL COMPOSITION:`;
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
+                    type: 'basic_analysis',
                     items: itemImpacts,
-                    total: total,
-                    score: sustainabilityScore
+                    total: total
                 })
             });
 
@@ -685,15 +634,375 @@ MATERIAL COMPOSITION:`;
             }
         });
 
-        // Add CSS animations
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes fadeOut {
-                from { opacity: 1; }
-                to { opacity: 0; }
+
+        
+        
+        // Load dual sustainability scores
+        async function loadDualScores() {
+            try {
+                console.log('Loading dual sustainability scores...');
+                const response = await fetch('/api/dual_cart_summary');
+                
+                if (!response.ok) {
+                    console.log(`Dual scoring endpoint failed with status ${response.status}`);
+                    if (response.status === 400) {
+                        console.log('Cart is empty, skipping dual scoring');
+                        return;
+                    }
+                    throw new Error(`Dual scoring endpoint error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.log('Dual scoring returned error:', data.error);
+                    throw new Error(`Dual scoring error: ${data.error}`);
+                }
+
+                console.log('Dual sustainability data:', data);
+
+                // Update main sustainability score section with dual scores
+                updateDualScoreDisplay(data);
+                
+                // Update individual item scores
+                updateItemScoresDisplay(data.item_scores);
+                
+                // Add cart insights
+                if (data.cart_insights?.length > 0) {
+                    addCartInsights(data.cart_insights);
+                }
+                
+            } catch (error) {
+                console.error('Error loading dual scores:', error);
+                // Fallback to original scoring
+                console.log('Falling back to original scoring...');
+                loadEnhancedScores();
             }
-        `;
-        document.head.appendChild(style);
+        }
+
+        function updateDualScoreDisplay(data) {
+            const scoreElement = document.getElementById('sustainability-score');
+            if (!scoreElement) return;
+
+            const initialCost = data.cart_initial_cost;
+            const lastingCost = data.cart_lasting_cost;
+            
+            const initialColor = getGradeColor(initialCost.grade);
+            const lastingColor = getGradeColor(lastingCost.grade);
+            
+            scoreElement.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <!-- Initial Cost -->
+                    <div style="background: #f8f9fa; border-radius: 8px; padding: 8px; border-left: 4px solid ${initialColor};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 0.8em; color: #666; font-weight: 500;">🏭 Initial Cost</div>
+                                <div style="font-size: 0.7em; color: #888;">Production impact</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 1.1em; font-weight: bold; color: #333;">
+                                    ${initialCost.score}%
+                                </span>
+                                <span style="background: ${initialColor}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 0.7em; font-weight: bold;">
+                                    ${initialCost.grade}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Lasting Cost -->
+                    <div style="background: #f8f9fa; border-radius: 8px; padding: 8px; border-left: 4px solid ${lastingColor};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 0.8em; color: #666; font-weight: 500;">🌱 Lasting Cost</div>
+                                <div style="font-size: 0.7em; color: #888;">Lifetime impact</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 1.1em; font-weight: bold; color: #333;">
+                                    ${lastingCost.score}%
+                                </span>
+                                <span style="background: ${lastingColor}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 0.7em; font-weight: bold;">
+                                    ${lastingCost.grade}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Overall Assessment -->
+                    <div style="text-align: center; margin-top: 4px;">
+                        <div style="font-size: 0.7em; color: #666;">
+                            ${getDualScoreMessage(initialCost.score, lastingCost.score)}
+                        </div>
+                    </div>
+
+
+                    <!-- Final Average Score -->
+                    <div style="background: #f8f9fa; border-radius: 8px; padding: 8px; border-left: 4px solid #28a745; margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 0.8em; color: #666; font-weight: 500;">🌍 Final Score</div>
+                                <div style="font-size: 0.7em; color: #888;">Average of both</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 1.1em; font-weight: bold; color: #333;">
+                                    ${Math.round((data.cart_initial_cost.score + data.cart_lasting_cost.score) / 2)}%
+                                </span>
+                                <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 8px; font-size: 0.7em; font-weight: bold;">
+                                    ${data.cart_initial_cost.score + data.cart_lasting_cost.score >= 140 ? 'A' : data.cart_initial_cost.score + data.cart_lasting_cost.score >= 120 ? 'B' : 'C'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateItemScoresDisplay(itemScores) {
+            const scoreList = document.getElementById('score-list');
+            if (!scoreList || !itemScores) return;
+            
+            let scoreHtml = '';
+            itemScores.forEach(item => {
+                const initialColor = getGradeColor(item.initial_cost.grade);
+                const lastingColor = getGradeColor(item.lasting_cost.grade);
+                const insight = item.sustainability_insight;
+                
+                scoreHtml += `
+                    <li style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
+                        <!-- Item Name -->
+                        <div style="font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #333;">
+                            ${item.item_name}
+                        </div>
+                        
+                        <!-- Dual Scores -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                            <div style="flex: 1; background: white; border-radius: 6px; padding: 6px; border-left: 3px solid ${initialColor};">
+                                <div style="font-size: 10px; color: #666; margin-bottom: 2px;">🏭 Initial</div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 12px; font-weight: 500;">${item.initial_cost.score}%</span>
+                                    <span style="background: ${initialColor}; color: white; padding: 1px 4px; border-radius: 6px; font-size: 8px; font-weight: bold;">
+                                        ${item.initial_cost.grade}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div style="flex: 1; background: white; border-radius: 6px; padding: 6px; border-left: 3px solid ${lastingColor};">
+                                <div style="font-size: 10px; color: #666; margin-bottom: 2px;">🌱 Lasting</div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="font-size: 12px; font-weight: 500;">${item.lasting_cost.score}%</span>
+                                    <span style="background: ${lastingColor}; color: white; padding: 1px 4px; border-radius: 6px; font-size: 8px; font-weight: bold;">
+                                        ${item.lasting_cost.grade}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sustainability Insight -->
+                        <div style="font-size: 10px; color: #666; font-style: italic; line-height: 1.3;">
+                            <strong>${insight.recommendation}</strong><br>
+                            ${insight.explanation}
+                        </div>
+                    </li>
+                `;
+            });
+            scoreList.innerHTML = scoreHtml;
+        }
+
+        function addCartInsights(insights) {
+            // Remove existing insights
+            const existingInsights = document.getElementById('cart-insights');
+            if (existingInsights) {
+                existingInsights.remove();
+            }
+            
+            // Create new insights section
+            const insightsDiv = document.createElement('div');
+            insightsDiv.id = 'cart-insights';
+            insightsDiv.style.cssText = `
+                background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+                border: 1px solid #c3e6cb;
+                border-radius: 8px;
+                padding: 12px;
+                margin: 10px 0;
+                font-size: 12px;
+            `;
+            
+            let insightsHtml = '<div style="font-weight: 600; color: #155724; margin-bottom: 8px;">💡 Cart Insights:</div>';
+            insights.forEach(insight => {
+                insightsHtml += `<div style="margin-bottom: 4px; color: #155724;">${insight}</div>`;
+            });
+            
+            insightsDiv.innerHTML = insightsHtml;
+            
+            // Insert after the score details
+            const scoreDetails = document.getElementById('score-details');
+            if (scoreDetails && scoreDetails.parentNode) {
+                scoreDetails.parentNode.insertBefore(insightsDiv, scoreDetails.nextSibling);
+            }
+        }
+
+        function getDualScoreMessage(initialScore, lastingScore) {
+            if (initialScore >= 70 && lastingScore >= 70) {
+                return "🌟 Excellent in both production and lifetime impact!";
+            } else if (initialScore < 40 && lastingScore >= 70) {
+                return "🔄 High initial cost, but great long-term value";
+            } else if (initialScore >= 70 && lastingScore < 40) {
+                return "⚠️ Low production cost, but poor longevity";
+            } else if (initialScore < 40 && lastingScore < 40) {
+                return "🚨 High impact in both production and lifetime";
+            } else {
+                return "⚖️ Balanced environmental impact";
+            }
+        }
+
+        // Update item analysis to use dual scoring
+        async function analyzeItem(qrCode, index) {
+            const panel = document.getElementById(`analysis-panel-${index}`);
+            const button = event.target;
+            
+            if (panel.style.display === 'block') {
+                panel.style.display = 'none';
+                button.textContent = 'Analyze Item';
+                return;
+            }
+            
+            panel.style.display = 'block';
+            panel.innerHTML = 'Analyzing item with dual sustainability assessment... Please wait.';
+            button.textContent = 'Analyzing...';
+            
+            try {
+                // Try dual analysis first
+                let response = await fetch(`/api/dual_analyze/${qrCode}`);
+                let data = await response.json();
+                
+                if (data.error) {
+                    console.log('Dual analysis failed, trying basic analysis');
+                    response = await fetch(`/api/analyze/${qrCode}`);
+                    data = await response.json();
+                    
+                    if (data.error) {
+                        panel.innerHTML = `<div style="color: red;">${data.message}</div>`;
+                        button.textContent = 'Analyze Item';
+                        return;
+                    } else {
+                        displayBasicAnalysis(data, panel);
+                    }
+                } else {
+                    displayDualAnalysis(data, panel);
+                }
+            } catch (error) {
+                panel.innerHTML = `<div style="color: red;">Error: ${error.message}</div>`;
+            }
+            
+            button.textContent = 'Hide Analysis';
+        }
+
+        // Display dual analysis results
+        function displayDualAnalysis(data, panel) {
+            const initial = data.initial_cost;
+            const lasting = data.lasting_cost;
+            const insight = data.sustainability_insight;
+            
+            let html = `
+<div style="font-family: monospace; font-size: 12px; line-height: 1.4; white-space: pre-wrap; background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto;">
+⚖️ DUAL SUSTAINABILITY ANALYSIS: ${data.item_name}
+${'='.repeat(65)}
+
+🏭 INITIAL COST (Production Impact): ${initial.score}% (${initial.grade})
+   ${initial.breakdown.explanation}
+   
+   📊 Production Breakdown:`;
+
+            for (const [category, score] of Object.entries(initial.breakdown.category_scores)) {
+                const categoryName = category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                html += `\n   • ${categoryName}: ${score}%`;
+            }
+
+            html += `\n\n🌱 LASTING COST (Lifecycle Impact): ${lasting.score}% (${lasting.grade})
+   ${lasting.breakdown.explanation}
+   
+   🔄 Lifecycle Breakdown:`;
+
+            for (const [component, score] of Object.entries(lasting.breakdown.component_scores)) {
+                const componentName = component.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                html += `\n   • ${componentName}: ${score}%`;
+            }
+
+            html += `\n\n${insight.recommendation}
+${'='.repeat(65)}
+
+💭 SUSTAINABILITY INSIGHT:
+${insight.explanation}`;
+
+            if (insight.material_insights?.length > 0) {
+                html += `\n\n🧵 MATERIAL INSIGHTS:`;
+                insight.material_insights.forEach(matInsight => {
+                    html += `\n• ${matInsight}`;
+                });
+            }
+
+            html += `\n\n📏 ITEM DETAILS:
+Weight: ${data.weight_grams}g
+Materials: ${data.materials_count} different materials`;
+
+            if (data.composition_penalty > 0) {
+                html += `\nComposition penalty: -${data.composition_penalty}% (doesn't add up to 100%)`;
+            }
+
+            html += `\n\n💡 HOW TO READ THESE SCORES:
+• Initial Cost = Environmental damage to MAKE this item
+• Lasting Cost = Environmental impact THROUGHOUT its life
+• Both scores: 0-100% (higher = better for environment)
+
+${insight.score_comparison.initial_higher ? 
+    'This item has higher production impact but better longevity.' :
+    'This item has lower production impact but worse longevity.'}
+${'='.repeat(65)}
+</div>`;
+
+            panel.innerHTML = html;
+        }
+
+        // Keep the existing basic analysis function as fallback
+        function displayBasicAnalysis(data, panel) {
+            // Your existing displayCartAnalysis function code here
+            let html = `
+ITEM ANALYSIS: ${data.item.item_name}
+${'='.repeat(50)}
+
+ITEM DETAILS:
+QR Code: ${data.item.qr_code}
+Name: ${data.item.item_name}
+Brand: ${data.item.brand || 'N/A'}
+Category: ${data.item.category || 'N/A'}
+Weight: ${data.item.weight_grams}g
+
+MATERIAL COMPOSITION:`;
+
+            data.materials.forEach(material => {
+                html += `\n• ${material.material_name.charAt(0).toUpperCase() + material.material_name.slice(1)}: ${material.percentage}%`;
+            });
+
+            html += `\n\nENVIRONMENTAL IMPACT ANALYSIS:\n${'-'.repeat(50)}`;
+
+            const categoryOrder = ['water_usage', 'carbon_footprint', 'energy_usage'];
+            
+            categoryOrder.forEach(category => {
+                if (data.impacts[category]) {
+                    const impact = data.impacts[category];
+                    html += `\n\n${impact.name.split(' ').slice(1).join(' ')}:`;
+                    
+                    impact.materials.forEach(mat => {
+                        html += `\n  ${mat.material}: ${mat.impact.toFixed(2)} ${impact.unit} for this ${data.item.weight_grams}g item`;
+                    });
+                    
+                    html += `\n  TOTAL: ${impact.value.toFixed(2)} ${impact.unit}`;
+                }
+            });
+
+            panel.innerHTML = html;
+        }
+
     </script>
 </body>
 </html>

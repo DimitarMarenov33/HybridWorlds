@@ -33,7 +33,24 @@
                     <div class="impact-item"><strong>Carbon:</strong> {{ prev_choice.total.carbon | round(2) }} kg_CO2</div>
                     <div class="impact-item"><strong>Energy:</strong> {{ prev_choice.total.energy | round(2) }} MJ</div>
                     {% endif %}
+                    {% if prev_choice.type == 'dual_scoring' %}
+                    <div class="dual-scores-section">
+                        <div class="score-row">
+                            <span class="score-label">🏭 Initial Cost:</span>
+                            <span class="score-value">{{ prev_choice.initial_cost.score }}% ({{ prev_choice.initial_cost.grade }})</span>
+                        </div>
+                        <div class="score-row">
+                            <span class="score-label">🌱 Lasting Cost:</span>
+                            <span class="score-value">{{ prev_choice.lasting_cost.score }}% ({{ prev_choice.lasting_cost.grade }})</span>
+                        </div>
+                        <div class="score-row final-score">
+                            <span class="score-label">🌍 Final Score:</span>
+                            <span class="score-value">{{ ((prev_choice.initial_cost.score + prev_choice.lasting_cost.score) / 2) | round(1) }}%</span>
+                        </div>
+                    </div>
+                    {% else %}
                     <div class="score-display">Sustainability Score: <span class="score-value">{{ prev_choice.score }}%</span></div>
+                    {% endif %}
                 </div>
                 {% endif %}
             {% endif %}
@@ -55,7 +72,24 @@
                 <div class="impact-item"><strong>Carbon:</strong> {{ current_choice.total.carbon | round(2) }} kg_CO2</div>
                 <div class="impact-item"><strong>Energy:</strong> {{ current_choice.total.energy | round(2) }} MJ</div>
                 {% endif %}
+                {% if current_choice.type == 'dual_scoring' %}
+                <div class="dual-scores-section">
+                    <div class="score-row">
+                        <span class="score-label">🏭 Initial Cost:</span>
+                        <span class="score-value">{{ current_choice.initial_cost.score }}% ({{ current_choice.initial_cost.grade }})</span>
+                    </div>
+                    <div class="score-row">
+                        <span class="score-label">🌱 Lasting Cost:</span>
+                        <span class="score-value">{{ current_choice.lasting_cost.score }}% ({{ current_choice.lasting_cost.grade }})</span>
+                    </div>
+                    <div class="score-row final-score">
+                        <span class="score-label">🌍 Final Score:</span>
+                        <span class="score-value">{{ ((current_choice.initial_cost.score + current_choice.lasting_cost.score) / 2) | round(1) }}%</span>
+                    </div>
+                </div>
+                {% else %}
                 <div class="score-display">Sustainability Score: <span class="score-value">{{ current_choice.score }}%</span></div>
+                {% endif %}
             </div>
             {% endif %}
             
@@ -65,10 +99,18 @@
                     <table class="comparison-table">
                         <thead><tr><th>Metric</th><th>Previous</th><th>Current</th></tr></thead>
                         <tbody>
-                            <tr><td><strong>Water (L)</strong></td><td>{{ prev_choice.total.water | round(2) }}</td><td>{{ current_choice.total.water | round(2) }}</td></tr>
-                            <tr><td><strong>Carbon (kg_CO₂)</strong></td><td>{{ prev_choice.total.carbon | round(2) }}</td><td>{{ current_choice.total.carbon | round(2) }}</td></tr>
-                            <tr><td><strong>Energy (MJ)</strong></td><td>{{ prev_choice.total.energy | round(2) }}</td><td>{{ current_choice.total.energy | round(2) }}</td></tr>
-                            <tr><td><strong>Sustainability Score</strong></td><td class="prev-score">{{ prev_choice.score }}%</td><td class="current-score">{{ current_choice.score }}%</td></tr>
+                            {% if prev_choice.type == 'basic_analysis' and current_choice.type == 'basic_analysis' %}
+                                <tr><td><strong>Water (L)</strong></td><td>{{ prev_choice.total.water | round(2) }}</td><td>{{ current_choice.total.water | round(2) }}</td></tr>
+                                <tr><td><strong>Carbon (kg_CO₂)</strong></td><td>{{ prev_choice.total.carbon | round(2) }}</td><td>{{ current_choice.total.carbon | round(2) }}</td></tr>
+                                <tr><td><strong>Energy (MJ)</strong></td><td>{{ prev_choice.total.energy | round(2) }}</td><td>{{ current_choice.total.energy | round(2) }}</td></tr>
+                                <tr><td><strong>Sustainability Score</strong></td><td class="prev-score">{{ prev_choice.score }}%</td><td class="current-score">{{ current_choice.score }}%</td></tr>
+                            {% elif prev_choice.type == 'dual_scoring' and current_choice.type == 'dual_scoring' %}
+                                <tr><td><strong>Initial Cost</strong></td><td>{{ prev_choice.initial_cost.score }}%</td><td>{{ current_choice.initial_cost.score }}%</td></tr>
+                                <tr><td><strong>Lasting Cost</strong></td><td>{{ prev_choice.lasting_cost.score }}%</td><td>{{ current_choice.lasting_cost.score }}%</td></tr>
+                                <tr><td><strong>Final Score</strong></td><td>{{ ((prev_choice.initial_cost.score + prev_choice.lasting_cost.score) / 2) | round(1) }}%</td><td>{{ ((current_choice.initial_cost.score + current_choice.lasting_cost.score) / 2) | round(1) }}%</td></tr>
+                            {% else %}
+                                <tr><td colspan="3"><em>Cannot compare different scoring methods</em></td></tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>

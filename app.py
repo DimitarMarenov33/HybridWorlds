@@ -4,10 +4,970 @@ import sqlite3
 import os
 from datetime import datetime
 import traceback
+import math
+import json
+from typing import Dict, List, Tuple, Optional
+from dataclasses import dataclass
+
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Needed for session
 
+
+@dataclass
+class DualSustainabilityConfig:
+    """Configuration for dual sustainability scoring: Initial Cost vs Lasting Cost"""
+    
+    # INITIAL COST - Production impact weights (water, energy, CO2)
+    initial_cost_weights = {
+        'water_usage': 0.40,        # 40% - Water scarcity is critical
+        'carbon_footprint': 0.35,   # 35% - Climate impact from production
+        'energy_usage': 0.25        # 25% - Energy for manufacturing
+    }
+    
+    # LASTING COST - Lifecycle impact weights
+    lasting_cost_weights = {
+        'durability_factor': 0.40,      # 40% - How long will it last?
+        'end_of_life_impact': 0.35,     # 35% - Biodegradation vs pollution
+        'microplastic_pollution': 0.15, # 15% - Ongoing pollution during use
+        'replacement_frequency': 0.10   # 10% - How often needs replacing
+    }
+    
+    # Material durability scores (0-100, higher = more durable)
+    material_durability_scores = {
+        # Natural fibers - excellent durability
+        'wool': 90,           # Can last decades with care
+        'cashmere': 85,       # High quality but delicate
+        'linen': 88,          # Gets better with age
+        'hemp': 92,           # Extremely durable
+        'silk': 80,           # Delicate but can last long
+        'organic cotton': 75,  # Better than conventional
+        'conventional cotton': 65,  # Moderate durability
+        
+        # Synthetic fibers - varies widely
+        'nylon': 70,          # Actually quite durable
+        'polyester': 45,      # Fast fashion quality, pills
+        'recycled polyester': 50,  # Slightly better
+        'acrylic': 25,        # Very poor, pills badly
+        'viscose': 35,        # Stretches out quickly
+        'tencel': 70,         # Better synthetic alternative
+        'elastane': 20,       # Loses stretch very quickly
+        'spandex': 20         # Degrades rapidly
+    }
+    
+    # End-of-life impact scores (0-100, higher = better for environment)
+    end_of_life_scores = {
+        # Natural materials - biodegradable
+        'wool': 95,            # Biodegrades in 1-5 years
+        'organic cotton': 90,   # Biodegrades in months
+        'conventional cotton': 80,  # Chemicals slow degradation
+        'linen': 95,           # Completely natural
+        'hemp': 95,            # Excellent biodegradation
+        'silk': 90,            # Natural protein fiber
+        'cashmere': 95,        # Natural animal fiber
+        
+        # Semi-natural/processed
+        'tencel': 70,          # Processed but biodegradable
+        'viscose': 55,         # Heavily processed cellulose
+        
+        # Synthetic materials - environmental disaster
+        'polyester': 5,        # 200+ years to degrade
+        'recycled polyester': 8,   # Still plastic
+        'nylon': 3,            # 30-40 years, toxic breakdown
+        'acrylic': 2,          # Worst environmental impact
+        'elastane': 2,         # Plastic pollution
+        'spandex': 2           # Same as elastane
+    }
+    
+    # Microplastic pollution scores (0-100, higher = less pollution)
+    microplastic_scores = {
+        # Natural materials - no microplastic pollution
+        'wool': 100,
+        'cotton': 100,
+        'organic cotton': 100,
+        'conventional cotton': 100,
+        'linen': 100,
+        'hemp': 100,
+        'silk': 100,
+        'cashmere': 100,
+        
+        # Semi-natural
+        'tencel': 95,          # Minimal synthetic content
+        'viscose': 85,         # Some chemical processing
+        
+        # Synthetic materials - major microplastic polluters
+        'polyester': 15,       # Heavy shedding in wash
+        'recycled polyester': 20,  # Still sheds plastic
+        'acrylic': 5,          # Worst microplastic shedder
+        'nylon': 25,           # Moderate shedding
+        'elastane': 20,        # Sheds during washing
+        'spandex': 20          # Same as elastane
+    }
+    
+    # Category multipliers for durability expectations
+    category_durability_expectations = {
+        'outerwear': 1.3,      # Expected to last much longer
+        'coat': 1.3,
+        'jacket': 1.2,
+        'jeans': 1.2,          # Durable category
+        'denim': 1.2,
+        'knitwear': 1.1,       # Often investment pieces
+        'sweater': 1.1,
+        't-shirt': 0.9,        # Often replaced frequently
+        'underwear': 0.7,      # Hygiene = frequent replacement
+        'activewear': 0.8,     # High wear, sweat damage
+        'socks': 0.6,          # Wear out quickly
+        'dress': 1.0,          # Baseline
+        'shirt': 1.0
+    }
+    
+    # Weight-based durability bonus
+    def get_weight_durability_factor(self, weight_grams):
+        """Heavier items often indicate better construction"""
+        if weight_grams > 500:     # Heavy items (coats, etc.)
+            return 1.15
+        elif weight_grams > 300:   # Medium-heavy
+            return 1.05
+        elif weight_grams < 80:    # Very light (often cheap)
+            return 0.9
+        else:
+            return 1.0
+    
+    # Brand quality multipliers (if you want to add brand data)
+    brand_quality_multipliers = {
+        # Premium brands (last longer)
+        'patagonia': 1.2,
+        'eileen fisher': 1.15,
+        'everlane': 1.1,
+        
+        # Fast fashion (shorter lifespan)
+        'shein': 0.7,
+        'fast fashion': 0.75,
+        'h&m': 0.8,
+        'zara': 0.85,
+        
+        # Default for unknown brands
+        'unknown': 1.0
+    }
+
+class DualSustainabilityScorer:
+    def __init__(self, db_connection):
+        self.db = db_connection
+        self.config = DualSustainabilityConfig()
+        self._dynamic_ranges = None
+    
+    def get_dual_sustainability_score(self, qr_code: str) -> Dict:
+        """Calculate both Initial Cost and Lasting Cost scores"""
+        item_row = self.db.get_clothing_item(qr_code)
+        if not item_row:
+            return None
+        
+        item = dict(item_row)
+        materials = self.db.get_material_composition(qr_code)
+        if not materials:
+            return {'error': 'No material composition found'}
+        
+        materials = [dict(mat) for mat in materials]
+        
+        # Validate material composition
+        total_percentage = sum(mat['percentage'] for mat in materials)
+        if abs(total_percentage - 100) > 1:
+            composition_penalty = min(10, abs(total_percentage - 100))
+        else:
+            composition_penalty = 0
+        
+        # Calculate INITIAL COST (Production Impact)
+        initial_cost_breakdown = self._calculate_initial_cost(item, materials)
+        initial_cost_score = initial_cost_breakdown['overall_score']
+        
+        # Calculate LASTING COST (Lifecycle Impact)
+        lasting_cost_breakdown = self._calculate_lasting_cost(item, materials)
+        lasting_cost_score = lasting_cost_breakdown['overall_score']
+        
+        # Apply composition penalty to both scores
+        initial_cost_score = max(0, initial_cost_score - composition_penalty)
+        lasting_cost_score = max(0, lasting_cost_score - composition_penalty)
+        # Calculate Final Sustainability Score (average of both)
+        final_score = (initial_cost_score + lasting_cost_score) / 2
+        
+        # Overall sustainability recommendation
+        sustainability_insight = self._generate_sustainability_insight(
+            initial_cost_score, lasting_cost_score, materials, item
+        )
+        
+        return {
+            'qr_code': qr_code,
+            'item_name': item['item_name'],
+            
+            # Dual scoring
+            'initial_cost': {
+                'score': round(initial_cost_score, 1),
+                'grade': self._score_to_grade(initial_cost_score),
+                'breakdown': initial_cost_breakdown
+            },
+            'lasting_cost': {
+                'score': round(lasting_cost_score, 1),
+                'grade': self._score_to_grade(lasting_cost_score),
+                'breakdown': lasting_cost_breakdown
+            },
+            
+            # Final combined score
+            'final_sustainability_score': {
+                'score': round(final_score, 1),
+                'grade': self._score_to_grade(final_score)
+            },
+            
+            # Overall recommendation
+            'sustainability_insight': sustainability_insight,
+            'composition_penalty': composition_penalty,
+            'weight_grams': item['weight_grams'],
+            'materials_count': len(materials)
+        }
+    
+    def _calculate_initial_cost(self, item, materials) -> Dict:
+        """Calculate Initial Cost - production environmental impact"""
+        ranges = self._get_dynamic_ranges()
+        
+        # Calculate production impacts (water, carbon, energy)
+        category_scores = {}
+        impact_details = {}
+        
+        for category in self.config.initial_cost_weights.keys():
+            total_impact = 0
+            material_impacts = []
+            
+            for material in materials:
+                impact_data = self.db.get_environmental_impact(
+                    material['material_name'], category
+                )
+                if impact_data:
+                    impact_data = dict(impact_data)
+                    material_impact = (
+                        impact_data['impact_value'] * 
+                        (material['percentage'] / 100) * 
+                        (item['weight_grams'] / 1000)
+                    )
+                    total_impact += material_impact
+                    
+                    material_impacts.append({
+                        'material': material['material_name'],
+                        'percentage': material['percentage'],
+                        'impact': material_impact,
+                        'unit': impact_data['unit']
+                    })
+            
+            # Normalize score (0-100, higher = better = lower impact)
+            if category in ranges:
+                min_val, max_val = ranges[category]
+                if max_val > min_val:
+                    # Lower impact = higher score
+                    normalized = max(0, min(1, (max_val - total_impact) / (max_val - min_val)))
+                else:
+                    normalized = 0.5
+            else:
+                normalized = 0.5
+                
+            category_scores[category] = normalized * 100
+            impact_details[category] = {
+                'raw_impact': total_impact,
+                'normalized_score': normalized * 100,
+                'materials': material_impacts
+            }
+        
+        # Calculate weighted Initial Cost score
+        overall_score = sum(
+            category_scores[cat] * weight 
+            for cat, weight in self.config.initial_cost_weights.items()
+            if cat in category_scores
+        )
+        
+        return {
+            'overall_score': overall_score,
+            'category_scores': {k: round(v, 1) for k, v in category_scores.items()},
+            'impact_details': impact_details,
+            'explanation': 'Production environmental cost (water, energy, CO2)'
+        }
+    
+    def _calculate_lasting_cost(self, item, materials) -> Dict:
+        """Calculate Lasting Cost - lifecycle environmental impact"""
+        
+        # 1. Durability Factor (how long will it last?)
+        durability_score = self._calculate_durability_score(item, materials)
+        
+        # 2. End-of-life Impact (biodegradation vs pollution)
+        end_of_life_score = self._calculate_weighted_material_score(
+            materials, self.config.end_of_life_scores
+        )
+        
+        # 3. Microplastic Pollution (ongoing pollution during use)
+        microplastic_score = self._calculate_weighted_material_score(
+            materials, self.config.microplastic_scores
+        )
+        
+        # 4. Replacement Frequency (inverse of durability)
+        replacement_score = durability_score  # Same as durability but conceptually different
+        
+        # Calculate weighted Lasting Cost score
+        component_scores = {
+            'durability_factor': durability_score,
+            'end_of_life_impact': end_of_life_score,
+            'microplastic_pollution': microplastic_score,
+            'replacement_frequency': replacement_score
+        }
+        
+        overall_score = sum(
+            component_scores[component] * weight 
+            for component, weight in self.config.lasting_cost_weights.items()
+        )
+        
+        return {
+            'overall_score': overall_score,
+            'component_scores': {k: round(v, 1) for k, v in component_scores.items()},
+            'explanation': 'Lifetime environmental cost (durability, pollution, disposal)'
+        }
+    
+    def _calculate_durability_score(self, item, materials) -> float:
+        """Calculate how durable/long-lasting the item will be"""
+        # Base durability from materials
+        weighted_durability = self._calculate_weighted_material_score(
+            materials, self.config.material_durability_scores
+        )
+        
+        # Apply category expectations
+        category = item.get('category', '').lower()
+        category_multiplier = self.config.category_durability_expectations.get(category, 1.0)
+        
+        # Apply weight-based durability factor
+        weight_factor = self.config.get_weight_durability_factor(item['weight_grams'])
+        
+        # Apply brand quality if available
+        brand = item.get('brand', '').lower()
+        brand_multiplier = self.config.brand_quality_multipliers.get(brand, 1.0)
+        
+        # Final durability score
+        final_score = weighted_durability * category_multiplier * weight_factor * brand_multiplier
+        
+        return min(100, final_score)  # Cap at 100
+    
+    def _calculate_weighted_material_score(self, materials, score_dict) -> float:
+        """Calculate weighted average score based on material composition"""
+        weighted_score = 0
+        
+        for material in materials:
+            material_name = material['material_name'].lower()
+            material_score = score_dict.get(material_name, 50)  # Default neutral score
+            weight_percentage = material['percentage'] / 100
+            weighted_score += material_score * weight_percentage
+        
+        return weighted_score
+    
+    def _generate_sustainability_insight(self, initial_cost, lasting_cost, materials, item) -> Dict:
+        """Generate insight comparing Initial vs Lasting costs"""
+        
+        # Determine dominant material
+        dominant_material = max(materials, key=lambda m: m['percentage'])
+        material_name = dominant_material['material_name'].lower()
+        
+        # Generate recommendation based on score comparison
+        if initial_cost >= 70 and lasting_cost >= 70:
+            recommendation = "🌟 Excellent Choice"
+            explanation = "Low production impact AND great longevity. This is a truly sustainable option."
+            
+        elif initial_cost < 40 and lasting_cost >= 70:
+            recommendation = "🔄 Trade-off Worth Making"
+            explanation = f"Higher production impact, but {material_name} will last much longer and biodegrade naturally. The long-term benefits outweigh the initial cost."
+            
+        elif initial_cost >= 70 and lasting_cost < 40:
+            recommendation = "⚠️ Short-term Thinking"
+            explanation = "Low production impact but poor longevity. You'll likely need to replace this frequently, increasing overall environmental cost."
+            
+        elif initial_cost < 40 and lasting_cost < 40:
+            recommendation = "🚨 Avoid if Possible"
+            explanation = "High production impact AND poor longevity. This represents the worst of both worlds environmentally."
+            
+        else:
+            recommendation = "⚖️ Balanced Choice"
+            explanation = "Moderate impact in both production and longevity. Consider your specific needs and usage patterns."
+        
+        # Add specific material insights
+        material_insights = []
+        if 'wool' in material_name or 'cashmere' in material_name:
+            material_insights.append("Natural fibers like wool use more water initially but last decades and biodegrade completely")
+        elif 'polyester' in material_name or 'acrylic' in material_name:
+            material_insights.append("Synthetic materials are cheaper to produce but create microplastic pollution and never biodegrade")
+        elif 'cotton' in material_name:
+            material_insights.append("Cotton is biodegradable but very water-intensive to produce")
+        
+        return {
+            'recommendation': recommendation,
+            'explanation': explanation,
+            'material_insights': material_insights,
+            'score_comparison': {
+                'initial_higher': initial_cost > lasting_cost,
+                'difference': abs(initial_cost - lasting_cost)
+            }
+        }
+    
+    def _get_dynamic_ranges(self) -> Dict:
+        """Get production impact ranges for normalization"""
+        if self._dynamic_ranges:
+            return self._dynamic_ranges
+        
+        # Use hardcoded ranges for now
+        self._dynamic_ranges = {
+            'water_usage': (5.91996, 6000),
+            'carbon_footprint': (0.9, 10.4),
+            'energy_usage': (1.09323, 138)
+        }
+        return self._dynamic_ranges
+    
+    def _score_to_grade(self, score: float) -> str:
+        """Convert numeric score to letter grade"""
+        if score >= 90: return 'A+'
+        elif score >= 85: return 'A'
+        elif score >= 80: return 'A-'
+        elif score >= 75: return 'B+'
+        elif score >= 70: return 'B'
+        elif score >= 65: return 'B-'
+        elif score >= 60: return 'C+'
+        elif score >= 55: return 'C'
+        elif score >= 50: return 'C-'
+        elif score >= 45: return 'D+'
+        elif score >= 40: return 'D'
+        else: return 'F'
+    
+    def calculate_cart_dual_score(self, cart_items: List[Dict]) -> Dict:
+        """Calculate dual scores for entire cart"""
+        if not cart_items:
+            return {'error': 'Empty cart'}
+        
+        item_scores = []
+        total_weight = 0
+        initial_cost_total = 0
+        lasting_cost_total = 0
+        
+        for cart_item in cart_items:
+            qr_code = cart_item['qr_code']
+            detailed_score = self.get_dual_sustainability_score(qr_code)
+            
+            if detailed_score and 'error' not in detailed_score:
+                item_scores.append(detailed_score)
+                weight = detailed_score['weight_grams']
+                total_weight += weight
+                
+                # Weight-adjusted contributions
+                initial_cost_total += detailed_score['initial_cost']['score'] * weight
+                lasting_cost_total += detailed_score['lasting_cost']['score'] * weight
+        
+        if not item_scores:
+            return {'error': 'No valid items scored'}
+        
+        # Calculate weighted averages
+        avg_initial_cost = initial_cost_total / total_weight if total_weight > 0 else 0
+        avg_lasting_cost = lasting_cost_total / total_weight if total_weight > 0 else 0
+        # Calculate final average score
+        final_cart_score = (avg_initial_cost + avg_lasting_cost) / 2
+        # Generate cart-level insights
+        cart_insights = self._generate_cart_insights(item_scores, avg_initial_cost, avg_lasting_cost)
+        
+        return {
+            'cart_initial_cost': {
+                'score': round(avg_initial_cost, 1),
+                'grade': self._score_to_grade(avg_initial_cost)
+            },
+            'cart_lasting_cost': {
+                'score': round(avg_lasting_cost, 1),
+                'grade': self._score_to_grade(avg_lasting_cost)
+            },
+            'cart_final_score': {
+                'score': round(final_cart_score, 1),
+                'grade': self._score_to_grade(final_cart_score)
+            },
+            'item_scores': item_scores,
+            'total_items': len(item_scores),
+            'total_weight_grams': total_weight,
+            'cart_insights': cart_insights
+        }
+    
+    def _generate_cart_insights(self, item_scores, avg_initial, avg_lasting) -> List[str]:
+        """Generate insights for the entire cart"""
+        insights = []
+        
+        if avg_initial >= 70 and avg_lasting >= 70:
+            insights.append("🌟 Excellent cart! Low production impact with great longevity")
+        elif avg_initial < 40 and avg_lasting >= 70:
+            insights.append("🔄 Investment mindset: Higher initial cost, but items will last much longer")
+        elif avg_initial >= 70 and avg_lasting < 40:
+            insights.append("⚠️ Fast fashion pattern: Low production cost but frequent replacement needed")
+        
+        # Material-based insights
+        natural_materials = 0
+        synthetic_materials = 0
+        
+        for item in item_scores:
+            # This would need to be extracted from the item data
+            # For now, simplified logic
+            if avg_lasting >= 60:
+                natural_materials += 1
+            else:
+                synthetic_materials += 1
+        
+        if natural_materials > synthetic_materials:
+            insights.append("🌱 Your cart favors natural, biodegradable materials")
+        elif synthetic_materials > natural_materials:
+            insights.append("🧪 Your cart contains mostly synthetic materials - consider natural alternatives")
+        
+        return insights
+
+class EnhancedSustainabilityScorer:
+    def __init__(self, db_connection):
+        self.db = db_connection
+        self.config = SustainabilityConfig()
+        self._dynamic_ranges = None
+        
+    def calculate_dynamic_ranges(self) -> Dict[str, Tuple[float, float]]:
+        """Calculate min/max ranges from actual database data"""
+        if self._dynamic_ranges:
+            return self._dynamic_ranges
+            
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        ranges = {}
+        categories = ['water_usage', 'carbon_footprint', 'energy_usage']
+        
+        for category in categories:
+            # Get all impact values for this category, weighted by typical usage
+            cursor.execute('''
+            SELECT ei.impact_value, 
+                   AVG(cmc.percentage) as avg_percentage,
+                   AVG(ci.weight_grams) as avg_weight
+            FROM environmental_impacts ei
+            JOIN materials m ON ei.material_id = m.material_id
+            JOIN clothing_material_composition cmc ON m.material_id = cmc.material_id
+            JOIN clothing_items ci ON cmc.qr_code = ci.qr_code
+            WHERE ei.impact_category = ?
+            GROUP BY ei.impact_value
+            ''', (category,))
+            
+            results = cursor.fetchall()
+            
+            if results:
+                # Calculate realistic impact values
+                calculated_impacts = []
+                for row in results:
+                    # Convert sqlite3.Row to dict to handle safely
+                    row_dict = dict(row)
+                    impact_value = row_dict['impact_value']
+                    avg_percentage = row_dict['avg_percentage'] or 50  # Default if null
+                    avg_weight = row_dict['avg_weight'] or 200  # Default if null
+                    
+                    calculated_impact = impact_value * (avg_percentage/100) * (avg_weight/1000)
+                    calculated_impacts.append(calculated_impact)
+                
+                if calculated_impacts:
+                    ranges[category] = (min(calculated_impacts), max(calculated_impacts))
+                else:
+                    # Fallback to original hardcoded values
+                    fallback_ranges = {
+                        'water_usage': (5.91996, 6000),
+                        'carbon_footprint': (0.9, 10.4),
+                        'energy_usage': (1.09323, 138)
+                    }
+                    ranges[category] = fallback_ranges.get(category, (0, 100))
+        
+        conn.close()
+        self._dynamic_ranges = ranges
+        return ranges
+    
+    def get_item_detailed_score(self, qr_code: str) -> Dict:
+        """Calculate detailed sustainability score with breakdown"""
+        item_row = self.db.get_clothing_item(qr_code)
+        if not item_row:
+            return None
+        
+        # Convert sqlite3.Row to dictionary to use .get() method
+        item = dict(item_row)
+            
+        materials = self.db.get_material_composition(qr_code)
+        if not materials:
+            return {'error': 'No material composition found'}
+        
+        # Convert materials to dictionaries too
+        materials = [dict(mat) for mat in materials]
+        
+        # Validate material composition totals 100%
+        total_percentage = sum(mat['percentage'] for mat in materials)
+        if abs(total_percentage - 100) > 1:
+            composition_penalty = min(20, abs(total_percentage - 100) * 2)
+        else:
+            composition_penalty = 0
+        
+        ranges = self.calculate_dynamic_ranges()
+        
+        # Calculate base impact scores
+        category_scores = {}
+        impact_breakdown = {}
+        
+        for category in self.config.category_weights.keys():
+            total_impact = 0
+            material_details = []
+            
+            for material in materials:
+                impact_data = self.db.get_environmental_impact(
+                    material['material_name'], category
+                )
+                if impact_data:
+                    # Convert impact_data to dict if it's a Row object
+                    if hasattr(impact_data, 'keys'):
+                        impact_data = dict(impact_data)
+                    
+                    material_impact = (
+                        impact_data['impact_value'] * 
+                        (material['percentage'] / 100) * 
+                        (item['weight_grams'] / 1000)
+                    )
+                    total_impact += material_impact
+                    
+                    material_details.append({
+                        'material': material['material_name'],
+                        'percentage': material['percentage'],
+                        'impact': material_impact,
+                        'unit': impact_data['unit']
+                    })
+            
+            # Normalize score (0-100, where 100 is best)
+            if category in ranges:
+                min_val, max_val = ranges[category]
+                if max_val > min_val:
+                    normalized = max(0, min(1, (max_val - total_impact) / (max_val - min_val)))
+                else:
+                    normalized = 1.0
+            else:
+                normalized = 0.5  # Default if no range data
+                
+            category_scores[category] = normalized * 100
+            impact_breakdown[category] = {
+                'raw_impact': total_impact,
+                'normalized_score': normalized * 100,
+                'materials': material_details
+            }
+        
+        # Apply weighted average
+        weighted_score = sum(
+            category_scores[cat] * weight 
+            for cat, weight in self.config.category_weights.items()
+            if cat in category_scores
+        )
+        
+        # Apply material sustainability bonuses/penalties
+        material_bonus = 0
+        for material in materials:
+            material_name = material['material_name'].lower()
+            percentage_weight = material['percentage'] / 100
+            
+            if material_name in self.config.material_sustainability_bonus:
+                material_bonus += (
+                    self.config.material_sustainability_bonus[material_name] * 
+                    percentage_weight
+                )
+            elif material_name in self.config.material_sustainability_penalty:
+                material_bonus += (
+                    self.config.material_sustainability_penalty[material_name] * 
+                    percentage_weight
+                )
+        
+        # Apply category multiplier
+        category = item.get('category', '').lower()
+        category_multiplier = self.config.category_multipliers.get(category, 1.0)
+        
+        # Calculate final score
+        final_score = weighted_score + material_bonus - composition_penalty
+        final_score = final_score / category_multiplier  # Lower multiplier = worse score
+        final_score = max(0, min(100, final_score))  # Clamp to 0-100
+        
+        return {
+            'qr_code': qr_code,
+            'item_name': item['item_name'],
+            'final_score': round(final_score, 1),
+            'category_scores': {k: round(v, 1) for k, v in category_scores.items()},
+            'impact_breakdown': impact_breakdown,
+            'adjustments': {
+                'material_bonus': round(material_bonus, 1),
+                'composition_penalty': round(composition_penalty, 1),
+                'category_multiplier': category_multiplier
+            },
+            'grade': self._score_to_grade(final_score),
+            'weight_grams': item['weight_grams'],
+            'materials_count': len(materials)
+        }
+    
+    def _score_to_grade(self, score: float) -> str:
+        """Convert numeric score to letter grade"""
+        if score >= 90: return 'A+'
+        elif score >= 85: return 'A'
+        elif score >= 80: return 'A-'
+        elif score >= 75: return 'B+'
+        elif score >= 70: return 'B'
+        elif score >= 65: return 'B-'
+        elif score >= 60: return 'C+'
+        elif score >= 55: return 'C'
+        elif score >= 50: return 'C-'
+        elif score >= 45: return 'D+'
+        elif score >= 40: return 'D'
+        else: return 'F'
+    
+    def calculate_cart_score(self, cart_items: List[Dict]) -> Dict:
+        """Calculate comprehensive cart sustainability score"""
+        if not cart_items:
+            return {'error': 'Empty cart'}
+        
+        item_scores = []
+        total_weight = 0
+        category_totals = {cat: 0 for cat in self.config.category_weights.keys()}
+        
+        for cart_item in cart_items:
+            qr_code = cart_item['qr_code']
+            detailed_score = self.get_item_detailed_score(qr_code)
+            
+            if detailed_score and 'error' not in detailed_score:
+                item_scores.append(detailed_score)
+                weight = detailed_score['weight_grams']
+                total_weight += weight
+                
+                # Weight-adjusted category contributions
+                for category, score in detailed_score['category_scores'].items():
+                    category_totals[category] += score * weight
+        
+        if not item_scores:
+            return {'error': 'No valid items scored'}
+        
+        # Calculate weighted averages
+        avg_category_scores = {
+            cat: total / total_weight if total_weight > 0 else 0
+            for cat, total in category_totals.items()
+        }
+        
+        # Overall cart score (weighted average of category scores)
+        cart_score = sum(
+            avg_category_scores[cat] * weight 
+            for cat, weight in self.config.category_weights.items()
+        )
+        
+        # Diversity bonus (having fewer, higher-quality items vs many low-quality)
+        diversity_factor = 1.0
+        if len(item_scores) <= 3:  # Encourage capsule wardrobes
+            diversity_factor = 1.05
+        
+        final_cart_score = min(100, cart_score * diversity_factor)
+        
+        return {
+            'cart_score': round(final_cart_score, 1),
+            'grade': self._score_to_grade(final_cart_score),
+            'category_breakdown': {k: round(v, 1) for k, v in avg_category_scores.items()},
+            'item_scores': item_scores,
+            'total_items': len(item_scores),
+            'total_weight_grams': total_weight,
+            'average_item_score': round(sum(item['final_score'] for item in item_scores) / len(item_scores), 1),
+            'diversity_factor': diversity_factor,
+            'recommendations': self._generate_recommendations(item_scores, avg_category_scores)
+        }
+    
+    def _generate_recommendations(self, item_scores: List[Dict], category_scores: Dict) -> List[str]:
+        """Generate sustainability improvement recommendations"""
+        recommendations = []
+        
+        # Find worst-performing category
+        worst_category = min(category_scores.keys(), key=lambda k: category_scores[k])
+        worst_score = category_scores[worst_category]
+        
+        if worst_score < 60:
+            category_names = {
+                'water_usage': 'water consumption',
+                'carbon_footprint': 'carbon emissions', 
+                'energy_usage': 'energy consumption'
+            }
+            recommendations.append(
+                f"Consider replacing items with high {category_names.get(worst_category, worst_category)}"
+            )
+        
+        # Find lowest-scoring items
+        low_scoring_items = [item for item in item_scores if item['final_score'] < 50]
+        if low_scoring_items:
+            recommendations.append(
+                f"Consider alternatives for: {', '.join(item['item_name'] for item in low_scoring_items[:2])}"
+            )
+        
+        # Material-specific recommendations
+        all_materials = []
+        for item in item_scores:
+            for category_breakdown in item['impact_breakdown'].values():
+                all_materials.extend([mat['material'] for mat in category_breakdown['materials']])
+        
+        if 'conventional cotton' in all_materials:
+            recommendations.append("Look for organic cotton alternatives to reduce water usage")
+        
+        if 'acrylic' in all_materials or 'nylon' in all_materials:
+            recommendations.append("Consider natural fiber alternatives to synthetic materials")
+        
+        return recommendations[:3]  # Limit to top 3 recommendations
+    
+
+dual_scorer = None
+
+def initialize_dual_scorer():
+    """Initialize the dual sustainability scorer"""
+    global dual_scorer
+    dual_scorer = DualSustainabilityScorer(db)
+
+# Dual scoring endpoints
+@app.route('/api/dual_analyze/<qr_code>')
+def dual_analyze_item(qr_code):
+    """Analyze item with dual sustainability scoring (Initial vs Lasting Cost)"""
+    try:
+        if not dual_scorer:
+            initialize_dual_scorer()
+            
+        result = dual_scorer.get_dual_sustainability_score(qr_code)
+        if result:
+            return jsonify(result)
+        else:
+            return jsonify({'error': 'Item not found'}), 404
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/dual_cart_summary')
+def dual_cart_summary():
+    """Calculate dual sustainability scores for entire cart"""
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Not logged in'}), 401
+        
+    cart_items = session.get('cart_items', [])
+    if not cart_items:
+        return jsonify({'error': 'Empty cart'}), 400
+        
+    try:
+        if not dual_scorer:
+            initialize_dual_scorer()
+            
+        result = dual_scorer.calculate_cart_dual_score(cart_items)
+        return jsonify(result)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+@app.route('/api/dual_config')
+def get_dual_config():
+    """Return dual scoring configuration for transparency"""
+    if not dual_scorer:
+        initialize_dual_scorer()
+        
+    return jsonify({
+        'initial_cost_weights': dual_scorer.config.initial_cost_weights,
+        'lasting_cost_weights': dual_scorer.config.lasting_cost_weights,
+        'material_durability_scores': dual_scorer.config.material_durability_scores,
+        'end_of_life_scores': dual_scorer.config.end_of_life_scores,
+        'explanation': {
+            'initial_cost': 'Production environmental impact (water, energy, CO2)',
+            'lasting_cost': 'Lifetime environmental impact (durability, pollution, disposal)'
+        }
+    })
+
+# Debug endpoint for dual scoring
+@app.route('/api/debug_dual_scoring')
+def debug_dual_scoring():
+    """Debug route to test dual scoring system"""
+    try:
+        username = session.get('username')
+        cart_items = session.get('cart_items', [])
+        
+        debug_info = {
+            'username': username,
+            'cart_items_count': len(cart_items),
+            'cart_items': cart_items
+        }
+        
+        if not username:
+            debug_info['error'] = 'No username in session'
+            return jsonify(debug_info)
+        
+        if not cart_items:
+            debug_info['error'] = 'No cart items'
+            return jsonify(debug_info)
+        
+        # Test dual scorer initialization
+        try:
+            if not dual_scorer:
+                initialize_dual_scorer()
+            debug_info['dual_scorer_created'] = True
+        except Exception as e:
+            debug_info['dual_scorer_error'] = str(e)
+            return jsonify(debug_info)
+        
+        # Test each cart item
+        item_tests = []
+        for i, cart_item in enumerate(cart_items):
+            qr_code = cart_item.get('qr_code')
+            item_test = {
+                'index': i,
+                'qr_code': qr_code,
+                'item_name': cart_item.get('name')
+            }
+            
+            try:
+                dual_score = dual_scorer.get_dual_sustainability_score(qr_code)
+                if dual_score and 'error' not in dual_score:
+                    item_test['dual_scoring_success'] = True
+                    item_test['initial_cost'] = dual_score['initial_cost']['score']
+                    item_test['lasting_cost'] = dual_score['lasting_cost']['score']
+                    item_test['insight'] = dual_score['sustainability_insight']['recommendation']
+                else:
+                    item_test['dual_scoring_error'] = dual_score.get('error', 'Unknown error')
+            except Exception as e:
+                item_test['dual_scoring_exception'] = str(e)
+                import traceback
+                item_test['dual_scoring_traceback'] = traceback.format_exc()
+            
+            item_tests.append(item_test)
+        
+        debug_info['item_tests'] = item_tests
+        
+        # Test cart scoring
+        try:
+            cart_result = dual_scorer.calculate_cart_dual_score(cart_items)
+            debug_info['cart_dual_scoring_success'] = True
+            debug_info['cart_result'] = cart_result
+        except Exception as e:
+            debug_info['cart_dual_scoring_error'] = str(e)
+            import traceback
+            debug_info['cart_dual_scoring_traceback'] = traceback.format_exc()
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': True,
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+# Update the app initialization
+def initialize_all_scorers():
+    """Initialize all scoring systems"""
+    initialize_dual_scorer()
+    # Keep your existing scorer if you want both
+    # integrate_enhanced_scoring(app, db)
+    
 # Use your existing database class structure
 class FashionEnvironmentDB:
     def __init__(self, db_path="fashion_env.db"):
@@ -1478,6 +2438,163 @@ def receive_esp32_word():
     except Exception as e:
         print(f"ESP32 endpoint error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# Integration with Flask app
+def integrate_enhanced_scoring(app, db):
+    """Add enhanced scoring endpoints to Flask app"""
+    scorer = EnhancedSustainabilityScorer(db)
+    
+    @app.route('/api/enhanced_analyze/<qr_code>')
+    def enhanced_analyze_item(qr_code):
+        try:
+            result = scorer.get_item_detailed_score(qr_code)
+            if result:
+                return jsonify(result)
+            else:
+                return jsonify({'error': 'Item not found'}), 404
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/enhanced_cart_summary')
+    def enhanced_cart_summary():
+        username = session.get('username')
+        if not username:
+            return jsonify({'error': 'Not logged in'}), 401
+            
+        cart_items = session.get('cart_items', [])
+        if not cart_items:
+            return jsonify({'error': 'Empty cart'}), 400
+            
+        try:
+            result = scorer.calculate_cart_score(cart_items)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/api/sustainability_config')
+    def get_sustainability_config():
+        """Return current scoring configuration for transparency"""
+        return jsonify({
+            'category_weights': scorer.config.category_weights,
+            'material_bonuses': scorer.config.material_sustainability_bonus,
+            'material_penalties': scorer.config.material_sustainability_penalty,
+            'category_multipliers': scorer.config.category_multipliers
+        })
+    
+
+@app.route('/api/debug_enhanced_scoring')
+def debug_enhanced_scoring():
+    """Debug route to test enhanced scoring"""
+    try:
+        username = session.get('username')
+        cart_items = session.get('cart_items', [])
+        
+        # Basic checks
+        debug_info = {
+            'username': username,
+            'cart_items_count': len(cart_items),
+            'cart_items': cart_items,
+            'session_keys': list(session.keys())
+        }
+        
+        if not username:
+            debug_info['error'] = 'No username in session'
+            return jsonify(debug_info)
+        
+        if not cart_items:
+            debug_info['error'] = 'No cart items'
+            return jsonify(debug_info)
+        
+        # Test if the enhanced scoring class can be created
+        try:
+            scorer = EnhancedSustainabilityScorer(db)
+            debug_info['scorer_created'] = True
+        except Exception as e:
+            debug_info['scorer_error'] = str(e)
+            return jsonify(debug_info)
+        
+        # Test each cart item individually
+        item_tests = []
+        for i, cart_item in enumerate(cart_items):
+            qr_code = cart_item.get('qr_code')
+            item_test = {
+                'index': i,
+                'qr_code': qr_code,
+                'item_name': cart_item.get('name')
+            }
+            
+            # Check if item exists in database
+            try:
+                db_item = db.get_clothing_item(qr_code)
+                if db_item:
+                    item_test['db_item_found'] = True
+                    item_test['db_item'] = dict(db_item)
+                else:
+                    item_test['db_item_found'] = False
+                    item_test['error'] = 'Item not found in database'
+                    item_tests.append(item_test)
+                    continue
+            except Exception as e:
+                item_test['db_error'] = str(e)
+                item_tests.append(item_test)
+                continue
+            
+            # Check material composition
+            try:
+                materials = db.get_material_composition(qr_code)
+                item_test['materials_count'] = len(materials)
+                item_test['materials'] = [dict(m) for m in materials]
+                
+                if not materials:
+                    item_test['error'] = 'No material composition found'
+                    item_tests.append(item_test)
+                    continue
+            except Exception as e:
+                item_test['materials_error'] = str(e)
+                item_tests.append(item_test)
+                continue
+            
+            # Test enhanced scoring for this item
+            try:
+                detailed_score = scorer.get_item_detailed_score(qr_code)
+                if detailed_score and 'error' not in detailed_score:
+                    item_test['scoring_success'] = True
+                    item_test['score'] = detailed_score['final_score']
+                else:
+                    item_test['scoring_error'] = detailed_score.get('error', 'Unknown scoring error')
+            except Exception as e:
+                item_test['scoring_exception'] = str(e)
+                import traceback
+                item_test['scoring_traceback'] = traceback.format_exc()
+            
+            item_tests.append(item_test)
+        
+        debug_info['item_tests'] = item_tests
+        
+        # Try full cart scoring if all items passed individual tests
+        all_items_ok = all(item.get('scoring_success', False) for item in item_tests)
+        if all_items_ok:
+            try:
+                result = scorer.calculate_cart_score(cart_items)
+                debug_info['cart_scoring_success'] = True
+                debug_info['cart_result'] = result
+            except Exception as e:
+                debug_info['cart_scoring_error'] = str(e)
+                import traceback
+                debug_info['cart_scoring_traceback'] = traceback.format_exc()
+        else:
+            debug_info['cart_scoring_skipped'] = 'Some items failed individual tests'
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'error': True,
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
     
 # Error handling middleware
 @app.errorhandler(404)
@@ -1495,4 +2612,6 @@ def internal_error(error):
 
 
 if __name__ == '__main__':
+    initialize_all_scorers()
+
     app.run(debug=True)
