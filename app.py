@@ -9,10 +9,20 @@ import json
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from esp32_sender import ESP32DataSender
-
+import threading
+import time
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Needed for session
+
+esp32_data_store = {
+    'environmental_data': None,
+    'has_new_data': False,
+    'last_updated': None,
+    'last_polled': None
+}
+data_store_lock = threading.Lock()
 
 
 @dataclass
@@ -2616,7 +2626,7 @@ esp32_sender = ESP32DataSender(esp32_ip="172.20.10.8", esp32_port=80)
 
 @app.route('/api/send_to_esp32', methods=['POST'])
 def send_cart_to_esp32():
-    """Send current cart environmental data to ESP32"""
+    """Send current cart environmental data to ESP32 using polling method"""
     username = session.get('username')
     if not username:
         return jsonify({'error': 'Not logged in'}), 401
@@ -2626,13 +2636,25 @@ def send_cart_to_esp32():
         return jsonify({'error': 'Empty cart'}), 400
     
     try:
-        # Calculate environmental impact
-        impact_data = esp32_sender.calculate_cart_environmental_impact(cart_items, db)
-        
-        # Send to ESP32
-        result = esp32_sender.send_to_esp32(impact_data)
-        
-        return jsonify(result)
+        # Calculate environmental impacts using your existing calculation method
+        if ESP32_AVAILABLE:
+            # Use your existing calculation method
+            impact_data = esp32_sender.calculate_cart_environmental_impact(cart_items, db)
+            
+            # Instead of sending directly to ESP32, store it for polling
+            update_esp32_data_store(impact_data)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Data stored for ESP32 polling - ESP32 will receive it within 5 seconds',
+                'method': 'polling',
+                'calculation_data': impact_data
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'ESP32 functionality not available in this deployment'
+            }), 503
         
     except Exception as e:
         return jsonify({
@@ -2657,7 +2679,45 @@ def send_simple_to_esp32():
     
     result = esp32_sender.send_simple_values(water, carbon, energy)
     return jsonify(result)
+# Add this helper function
+def update_esp32_data_store(environmental_data):
+    """Update the data store with new environmental data"""
+    with data_store_lock:
+        esp32_data_store['environmental_data'] = environmental_data.copy()
+        esp32_data_store['has_new_data'] = True
+        esp32_data_store['last_updated'] = datetime.now()
+    
+    print(f"ESP32 data store updated: {environmental_data}")
 
+# Add the ESP32 polling endpoint
+@app.route('/api/esp32_poll', methods=['GET'])
+def esp32_poll():
+    """Endpoint for ESP32 to poll for new environmental data"""
+    
+    with data_store_lock:
+        current_time = datetime.now()
+        esp32_data_store['last_polled'] = current_time
+        
+        if esp32_data_store['has_new_data'] and esp32_data_store['environmental_data']:
+            # Return the environmental data
+            response_data = {
+                'has_new_data': True,
+                'water_liters': esp32_data_store['environmental_data'].get('water_usage', 0),
+                'carbon_kg': esp32_data_store['environmental_data'].get('carbon_footprint', 0),
+                'energy_mj': esp32_data_store['environmental_data'].get('energy_usage', 0),
+                'item_count': esp32_data_store['environmental_data'].get('item_count', 0),
+                'timestamp': int(time.time())
+            }
+            
+            # Mark as delivered (ESP32 has received it)
+            esp32_data_store['has_new_data'] = False
+            
+            print(f"ESP32 polled - sending new data: {response_data}")
+            return jsonify(response_data)
+        else:
+            # No new data available
+            return jsonify({'has_new_data': False}), 204
+        
 if __name__ == '__main__':
     initialize_all_scorers()
 
