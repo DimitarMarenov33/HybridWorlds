@@ -1004,5 +1004,30 @@ MATERIAL COMPOSITION:`;
         }
 
     </script>
+
+    <button onclick="sendToESP32()" class="scanner-btn scanner-btn-primary" style="margin: 10px 0;">
+        📡 Send to ESP32
+    </button>
+
+    <script>
+    async function sendToESP32() {
+        try {
+            const response = await fetch('/api/send_to_esp32', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                alert('✅ Data sent to ESP32 successfully!');
+            } else {
+                alert('❌ Failed to send data: ' + result.message);
+            }
+        } catch (error) {
+            alert('❌ Error: ' + error.message);
+        }
+    }
+    </script>    
 </body>
 </html>

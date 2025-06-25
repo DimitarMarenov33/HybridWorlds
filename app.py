@@ -8,6 +8,7 @@ import math
 import json
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+from esp32_sender import ESP32DataSender
 
 
 app = Flask(__name__)
@@ -2609,7 +2610,53 @@ def internal_error(error):
         return jsonify({'error': True, 'message': 'Internal server error'}), 500
     return render_template('500.html'), 500
 
+#esp32
+# Initialize ESP32 sender (update IP address to match your ESP32)
+esp32_sender = ESP32DataSender(esp32_ip="192.168.1.100", esp32_port=80)
 
+@app.route('/api/send_to_esp32', methods=['POST'])
+def send_cart_to_esp32():
+    """Send current cart environmental data to ESP32"""
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    cart_items = session.get('cart_items', [])
+    if not cart_items:
+        return jsonify({'error': 'Empty cart'}), 400
+    
+    try:
+        # Calculate environmental impact
+        impact_data = esp32_sender.calculate_cart_environmental_impact(cart_items, db)
+        
+        # Send to ESP32
+        result = esp32_sender.send_to_esp32(impact_data)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        }), 500
+
+@app.route('/api/test_esp32')
+def test_esp32_connection():
+    """Test ESP32 connection"""
+    result = esp32_sender.test_connection()
+    return jsonify(result)
+
+@app.route('/api/send_simple_to_esp32', methods=['POST'])
+def send_simple_to_esp32():
+    """Send simple values to ESP32"""
+    data = request.get_json()
+    
+    water = data.get('water', 0)
+    carbon = data.get('carbon', 0) 
+    energy = data.get('energy', 0)
+    
+    result = esp32_sender.send_simple_values(water, carbon, energy)
+    return jsonify(result)
 
 if __name__ == '__main__':
     initialize_all_scorers()
