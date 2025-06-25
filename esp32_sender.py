@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import time
 
 class ESP32DataSender:
-    def __init__(self, esp32_ip: str = "192.168.1.100", esp32_port: int = 80):
+    def __init__(self, esp32_ip: str = "172.20.10.8", esp32_port: int = 80):
         """
         Initialize ESP32 data sender
         

@@ -2612,7 +2612,7 @@ def internal_error(error):
 
 #esp32
 # Initialize ESP32 sender (update IP address to match your ESP32)
-esp32_sender = ESP32DataSender(esp32_ip="192.168.1.100", esp32_port=80)
+esp32_sender = ESP32DataSender(esp32_ip="172.20.10.8", esp32_port=80)
 
 @app.route('/api/send_to_esp32', methods=['POST'])
 def send_cart_to_esp32():
