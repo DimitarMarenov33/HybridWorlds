@@ -16,6 +16,10 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Needed for session
 
+from status_display import status_bp
+app.register_blueprint(status_bp)
+
+
 esp32_data_store = {
     'environmental_data': None,
     'has_new_data': False,
